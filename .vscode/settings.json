@@ -1,0 +1,21 @@
+{
+  "editor.formatOnSave": true,
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "javascript.preferences.importModuleSpecifier": "relative",
+  "files.exclude": {
+    "**/node_modules": true,
+    "**/.vite": true,
+    "**/out": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/.vite": true,
+    "**/out": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules": true,
+    "**/.vite": true,
+    "**/out": true
+  }
+} 

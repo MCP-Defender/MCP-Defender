@@ -1,0 +1,160 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start Development",
+      "type": "npm",
+      "script": "start",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Build CLI",
+      "type": "npm",
+      "script": "build:cli",
+      "problemMatcher": [
+        "$tsc"
+      ],
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "group": "build"
+    },
+    {
+      "label": "Build All",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Build CLI",
+        "Kill Processes on Port 8081"
+      ],
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Package Application",
+      "type": "npm",
+      "script": "package",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Make Distribution",
+      "type": "npm",
+      "script": "make",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Kill Processes on Port 8081",
+      "type": "shell",
+      "command": "lsof -ti:8081 | xargs kill -9 || echo 'No processes on port 8081'",
+      "presentation": {
+        "reveal": "never",
+        "panel": "shared"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prepare Debug Environment",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "Kill Processes on Port 8081",
+        "Build CLI"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run All MCP Defender Tests",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "test:all"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "dependsOn": [
+        "Build All"
+      ]
+    },
+    {
+      "label": "Run STDIO Tests",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "test:stdio"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": "test",
+      "dependsOn": [
+        "Build All"
+      ]
+    },
+    {
+      "label": "Run SSE Tests",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "test:sse"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": "test",
+      "dependsOn": [
+        "Build All"
+      ]
+    },
+    {
+      "label": "Run Streamable HTTP Tests",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "run",
+        "test:streamable"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "group": "test",
+      "dependsOn": [
+        "Build All"
+      ]
+    }
+  ]
+}

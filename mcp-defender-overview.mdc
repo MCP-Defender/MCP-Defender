@@ -1,0 +1,137 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# MCP Defender Overview
+
+MCP Defender is a security application designed to monitor and protect Model Context Protocol (MCP) communications. It intercepts tool calls and responses, verifying them against security signatures to prevent potentially harmful operations. The following is a breakdown of the key components and files.
+
+## Main Components
+
+### Electron Application
+
+The main application provides the user interface and manages the proxy server. Key files:
+- [src/main.ts](mdc:src/main.ts) - Main Electron process
+- @src/ipc-handlers - Contains ipc handling logic
+
+#### Electron User Interface
+The UI is built with React and ShadCN
+- [src/preload.ts](mdc:src/preload.ts) - Preload script for the Electron window
+- @src/components/App.tsx - Main React component
+- @src/components/tabs - Tabs for each screen (Threats, Apps, Settings)
+
+### Services Architecture
+
+MCP Defender uses a service-based architecture for managing application functionality:
+
+#### Service Structure
+Each service follows a consistent pattern:
+- `src/services/[service-name]/service.ts` - Main service implementation
+- `src/services/[service-name]/handlers.ts` - IPC handlers for the service
+- `src/services/[service-name]/types.ts` - TypeScript definitions for the service
+
+Services extend the `BaseService` class which provides:
+- Built-in logging with service name prefixing
+- Event emission capabilities
+- Lifecycle management (start/stop)
+
+#### Preload Integration
+Services expose their functionality to the renderer process through the preload script:
+- Each service has a corresponding API in `src/preload.ts`
+- API interfaces are defined in `src/global.d.ts` using the pattern `[serviceName]API`
+
+#### Current Services
+- **Settings Service** (`src/services/settings/`) - Manages application settings and persistence
+- **Configurations Service** (`src/services/configurations/`) - Manages MCP configurations for different applications
+  - Uses adapter pattern to handle different application config formats
+  - Provides protection, monitoring, and restoration of MCP configurations
+  - Adapters: `StandardMCPConfiguration`, `VSCodeMCPConfiguration`
+
+#### Logging
+All services use a common logging system that:
+- Automatically prefixes logs with the service name
+- Supports different log levels (DEBUG, INFO, WARN, ERROR)
+- Writes logs to both console and file
+- Log files are stored in the user's app data directory
+
+### Defender Server
+
+The Defender Server runs via Electron's utility framework and intercepts and verifies MCP communications. It serves two main purposes.
+1) Proxy MCP SSE transport
+2) Expose an API for the CLI helper to communicate with the main electron app. This API is used exclusively for proxying STDIO transport and for communication between the CLI helper and the MCP server it is defending.
+- [src/defender/defender-controller.ts](mdc:src/defender/defender-controller.ts) - Acts as a bridge for messaging between the main electron process and the utility framework
+
+### CLI Helper
+
+The CLI helper is a standalone binary that proxies STDIO communications. 
+- [src/cli.ts](mdc:src/cli.ts) - CLI helper code
+
+### Verification and Signatures
+
+Signatures are used to verify MCP activity. Signatures contain a prompt which is provided to an LLM along with MCP communications for evaluations
+- [src/types/signatures.ts](mdc:src/types/signatures.ts) - Signature, verification, and scan results definitions
+
+Verification is currently done for tool requests and responses
+- @src/utils-verification-utils - Contains methods used for verification
+
+#### STDIO Verification Flow
+ Client's MCP config is configured to be with cli as the first argument:
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "node",
+      "args": [
+        "cli",
+        "npx",
+        "@modelcontextprotocol/server-everything"
+      ]
+    }
+  }
+}
+```
+1. Client sends a tool call request
+2. cli STDIO proxy intercepts the request
+3. Proxy forwards the request to MCP Defender for verification via a api
+4. MCP Defender applies policy rules and returns a decision
+5. If approved, proxy forwards request to the MCP server
+6. MCP server processes the request and returns a response
+7. Proxy verifies the response with MCP Defender
+8. Approved response is forwarded back to the client
+
+#### SSE Verification Flow
+ Client's MCP config is configured to use our MCP defender url instead of the original URL (http://localhost:8081) corresoponds to MCP Defender:
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "url": "http://localhost:8081/everything/sse",
+      "env": {
+      }
+    }
+  }
+}
+```
+1. Client sends a tool call request
+2. SSE proxy intercepts the request
+3. Proxy forwards the request to MCP Defender for verification
+4. MCP Defender applies policy rules and returns a decision
+5. If approved, proxy forwards request to the MCP server
+6. MCP server processes the request and returns a response
+7. Proxy verifies the response with MCP Defender
+8. Approved response is forwarded back to the client
+
+Scan Results are the output of the verification process they are saved to a log and presented to the user for review
+
+## Build Configuration
+
+The build process is managed through Electron Forge Vite Typescript:
+- [forge.config.ts](mdc:forge.config.ts) - Main configuration for building and packaging
+- [package.json](mdc:package.json) - Package configuration and dependencies
+- [vite.main.config.ts](mdc:vite.main.config.ts) [vite.preload.config.ts](mdc:vite.preload.config.ts) [vite.renderer.config.ts](mdc:vite.renderer.config.ts) [vite.utility.config.ts](mdc:vite.utility.config.ts)
+
+## MCP Spec
+- Let's always keep the MCP spec in mind: https://modelcontextprotocol.io/specification/2025-03-26.md
+- https://modelcontextprotocol.io/specification/2025-03-26/basic.md
+- Transport info: https://modelcontextprotocol.io/specification/2025-03-26/basic/transports.md

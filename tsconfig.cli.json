@@ -1,0 +1,16 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "outDir": "dist",
+        "module": "NodeNext",
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "target": "ES2020"
+    },
+    "include": [
+        "src/cli.ts"
+    ],
+    "exclude": [
+        "node_modules"
+    ]
+}
