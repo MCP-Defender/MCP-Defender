@@ -3,6 +3,8 @@ import { updateElectronApp } from 'update-electron-app';
 // @ts-ignore
 import started from 'electron-squirrel-startup';
 import path from 'node:path';
+import fs from 'node:fs';
+import os from 'node:os';
 import { createSecurityAlertWindow, MainWindowTabs, createTray, registerUIHandlers, showMainWindow, getMainWindow, getOnboardingWindow, updateDockVisibility, showOnboardingWindow, showSettingsWindow } from './ipc-handlers/ui-manager';
 
 // import {
@@ -27,6 +29,9 @@ let isShuttingDown = false;
 
 // Store the initial URL if the app is launched by a URL (macOS)
 let deeplinkingUrl: string | null = null;
+
+// Store the path to the CLI in tmp directory
+let tmpCliPath: string | null = null;
 
 // Update the app from Github Releases (repo defined in package.json)
 // https://www.electronforge.io/config/publishers/github#auto-updating-from-github
@@ -107,7 +112,7 @@ if (!gotTheLock) {
     logger.info('App ready event fired');
     logger.info(`Process arguments: ${JSON.stringify(process.argv)}`);
 
-    startupApp();
+    await startupApp();
 
     // Process any queued deep link from macOS
     if (deeplinkingUrl) {
@@ -183,7 +188,10 @@ function processDeepLink(url: string) {
   }
 }
 
-function startupApp() {
+async function startupApp() {
+  // Copy CLI to tmp directory first
+  await copyCLIToTmpDirectory();
+
   // Need to start settings service first as it has onboarding info
   const serviceManager = ServiceManager.getInstance();
   serviceManager.startSettingsService();
@@ -193,6 +201,11 @@ function startupApp() {
     // Start all services if onboarding is complete
     logger.info('Onboarding completed, starting all services');
     serviceManager.startRemainingServices();
+
+    // Update CLI path in configurations service after it's started
+    if (serviceManager.configurationsService) {
+      serviceManager.configurationsService.updateCliPath();
+    }
   } else {
     // Only start the settings service for onboarding
     logger.info('Onboarding not completed, starting only the settings service');
@@ -202,8 +215,6 @@ function startupApp() {
   registerUIHandlers();
 
   initializeUI();
-
-
 }
 
 /**
@@ -261,6 +272,10 @@ app.on('before-quit', async (event) => {
       // Stop all services in the correct order
       const serviceManager = ServiceManager.getInstance();
       await serviceManager.stopServices();
+
+      // Clean up tmp CLI file
+      await cleanupTmpCli();
+
       logger.info('Shutdown sequence complete, quitting application.');
     } catch (error) {
       logger.error('Error during shutdown sequence:', error);
@@ -271,3 +286,83 @@ app.on('before-quit', async (event) => {
     app.exit(0);
   }
 });
+
+/**
+ * Copy the CLI executable to the tmp directory
+ * This ensures the CLI is accessible and executable from a writable location
+ */
+async function copyCLIToTmpDirectory(): Promise<void> {
+  try {
+    // Get the source CLI path based on environment
+    let sourcePath: string;
+
+    if (app.isPackaged) {
+      // In production builds, the CLI is stored in the Resources directory
+      if (process.platform === 'darwin') {
+        // On macOS, the path is in Contents/Resources
+        sourcePath = path.join(process.resourcesPath, 'cli.js');
+      } else {
+        // On Windows/Linux, just use resourcesPath directly
+        sourcePath = path.join(process.resourcesPath, 'cli.js');
+      }
+    } else {
+      // In development, use the path in the dist directory
+      sourcePath = path.join(app.getAppPath(), 'dist', 'bin', 'cli.js');
+    }
+
+    // Check if source file exists
+    if (!fs.existsSync(sourcePath)) {
+      logger.error(`CLI source file not found at: ${sourcePath}`);
+      return;
+    }
+
+    // Create tmp directory path for MCP Defender
+    const tmpDir = path.join(os.tmpdir(), 'mcp-defender');
+
+    // Ensure tmp directory exists
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+
+    // Set destination path
+    const destPath = path.join(tmpDir, 'cli.js');
+
+    // Copy the file
+    fs.copyFileSync(sourcePath, destPath);
+
+    // Make it executable (important for Unix-like systems)
+    if (process.platform !== 'win32') {
+      fs.chmodSync(destPath, '755');
+    }
+
+    // Store the tmp CLI path globally
+    tmpCliPath = destPath;
+
+    logger.info(`CLI copied successfully from ${sourcePath} to ${destPath}`);
+  } catch (error) {
+    logger.error('Failed to copy CLI to tmp directory:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get the path to the CLI executable in the tmp directory
+ * @returns The path to the CLI or null if not copied yet
+ */
+export function getTmpCliPath(): string | null {
+  return tmpCliPath;
+}
+
+/**
+ * Clean up the CLI file from the tmp directory
+ */
+async function cleanupTmpCli(): Promise<void> {
+  if (tmpCliPath && fs.existsSync(tmpCliPath)) {
+    try {
+      fs.unlinkSync(tmpCliPath);
+      logger.info(`Cleaned up tmp CLI file: ${tmpCliPath}`);
+    } catch (error) {
+      logger.error('Failed to clean up tmp CLI file:', error);
+    }
+  }
+}

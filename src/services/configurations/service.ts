@@ -16,6 +16,7 @@ import {
 } from './types';
 import { notification } from '../../utils/notification';
 import { NotificationSettings } from '../settings/types';
+import { getTmpCliPath } from '../../main';
 
 // Create a logger for the configurations service
 const logger = createLogger('ConfigurationsService');
@@ -74,22 +75,29 @@ export class ConfigurationsService extends BaseService {
     constructor() {
         super('Configurations');
 
-        // Get path to CLI executable - handle both dev and production environments
-        if (app.isPackaged) {
-            // In production builds, the CLI is stored in the Resources directory
-            // as specified by extraResource in forge.config.ts
-            if (process.platform === 'darwin') {
-                // On macOS, the path is in Contents/Resources
-                this.cliPath = path.join(process.resourcesPath, 'cli.js');
-            } else {
-                // On Windows/Linux, just use resourcesPath directly
-                this.cliPath = path.join(process.resourcesPath, 'cli.js');
-            }
-            this.logger.info(`Using production CLI path: ${this.cliPath}`);
+        // Get path to CLI executable from tmp directory
+        const tmpCliPath = getTmpCliPath();
+        if (tmpCliPath) {
+            this.cliPath = tmpCliPath;
+            this.logger.info(`Using tmp CLI path: ${this.cliPath}`);
         } else {
-            // In development, use the path in the dist directory
-            this.cliPath = path.join(app.getAppPath(), 'dist', 'bin', 'cli.js');
-            this.logger.info(`Using development CLI path: ${this.cliPath}`);
+            // Fallback to original logic if tmp path not available yet
+            if (app.isPackaged) {
+                // In production builds, the CLI is stored in the Resources directory
+                // as specified by extraResource in forge.config.ts
+                if (process.platform === 'darwin') {
+                    // On macOS, the path is in Contents/Resources
+                    this.cliPath = path.join(process.resourcesPath, 'cli.js');
+                } else {
+                    // On Windows/Linux, just use resourcesPath directly
+                    this.cliPath = path.join(process.resourcesPath, 'cli.js');
+                }
+                this.logger.info(`Using fallback production CLI path: ${this.cliPath}`);
+            } else {
+                // In development, use the path in the dist directory
+                this.cliPath = path.join(app.getAppPath(), 'dist', 'bin', 'cli.js');
+                this.logger.info(`Using fallback development CLI path: ${this.cliPath}`);
+            }
         }
 
         // Listen for defender ready event
@@ -133,6 +141,18 @@ export class ConfigurationsService extends BaseService {
         });
 
         // No need to register IPC handlers here as they're handled in handlers.ts
+    }
+
+    /**
+     * Update the CLI path to use the tmp directory version
+     * This should be called after the CLI has been copied to tmp
+     */
+    updateCliPath(): void {
+        const tmpCliPath = getTmpCliPath();
+        if (tmpCliPath && tmpCliPath !== this.cliPath) {
+            this.logger.info(`Updating CLI path from ${this.cliPath} to ${tmpCliPath}`);
+            this.cliPath = tmpCliPath;
+        }
     }
 
     /**
