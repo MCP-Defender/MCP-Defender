@@ -55,4 +55,5 @@ export interface Settings {
     onboardingCompleted: boolean;
     disabledSignatures: Set<string> | string[]; // Set in memory, string[] for serialization
     startOnLogin: boolean; // Whether to start the app when user logs into their computer
+    enableSSEProxying: boolean; // Whether to proxy SSE (Server-Sent Events) transport through our server
 }

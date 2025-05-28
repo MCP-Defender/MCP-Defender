@@ -698,8 +698,7 @@ export class ConfigurationsService extends BaseService {
     }
 
     /**
-     * Process a configuration file for an application
-     * This protects the configuration by intercepting MCP calls through our proxy
+     * Process configuration for an application
      */
     async processConfig(appName: string): Promise<ConfigOperationResult> {
         const app = this.applications.get(appName);
@@ -712,11 +711,10 @@ export class ConfigurationsService extends BaseService {
             };
         }
 
-        // Check if already processing this application to prevent loops
+        // Check if we're already processing this app
         if (this.processingApplications.has(appName)) {
-            this.logger.debug(`Skipping duplicate processing for ${appName} - already in progress`);
             return {
-                success: true,
+                success: false,
                 message: `Processing already in progress for ${appName}`
             };
         }
@@ -735,8 +733,13 @@ export class ConfigurationsService extends BaseService {
                 (config as any).setConfigPath(app.configurationPath);
             }
 
-            // Process the configuration - pass application name for context
-            const result = await config.processConfigFile(app.name);
+            // Get SSE proxying setting from settings service
+            const serviceManager = ServiceManager.getInstance();
+            const settings = serviceManager.settingsService.getSettings();
+            const enableSSEProxying = settings.enableSSEProxying ?? false; // Default to false for safety
+
+            // Process the configuration - pass application name and SSE setting
+            const result = await config.processConfigFile(app.name, enableSSEProxying);
 
             // Update the application with the results
             if (result.success) {

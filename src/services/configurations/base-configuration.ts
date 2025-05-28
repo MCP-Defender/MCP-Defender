@@ -225,38 +225,44 @@ export abstract class BaseMCPConfiguration {
      * Generate a proxied version of the MCP configuration
      * @param config The original MCP configuration
      * @param appName Optional application name for context
+     * @param enableSSEProxying Whether to proxy SSE transports (default: true for backwards compatibility)
      * @returns The proxied MCP configuration
      */
-    protectConfig(config: MCPConfig, appName?: string): MCPConfig {
+    protectConfig(config: MCPConfig, appName?: string, enableSSEProxying: boolean = true): MCPConfig {
         // Create a deep copy to avoid modifying the original
         const proxiedConfig: MCPConfig = JSON.parse(JSON.stringify(config));
         const serverCount = Object.keys(proxiedConfig.mcpServers || {}).length;
 
         // Use the app name from the configuration path if not provided
         const effectiveAppName = appName || path.basename(this.getConfigPath(), '.json');
-        logger.debug(`Protecting ${serverCount} servers for app: ${effectiveAppName}`);
+        logger.debug(`Protecting ${serverCount} servers for app: ${effectiveAppName}, SSE proxying: ${enableSSEProxying}`);
 
         // Process each server configuration
         for (const [key, server] of Object.entries(proxiedConfig.mcpServers)) {
             // Handle SSE servers
             if ('url' in server) {
-                // Store original URL
-                const originalUrl = server.url;
-                logger.debug(`Protecting SSE server: ${key}, original URL: ${originalUrl}`);
+                if (enableSSEProxying) {
+                    // Store original URL
+                    const originalUrl = server.url;
+                    logger.debug(`Protecting SSE server: ${key}, original URL: ${originalUrl}`);
 
-                // Update to use our proxy endpoint - include app name in path
-                server.url = `http://localhost:${this.proxyPort}/${effectiveAppName}/${key}/sse`;
+                    // Update to use our proxy endpoint - include app name in path
+                    server.url = `http://localhost:${this.proxyPort}/${effectiveAppName}/${key}/sse`;
 
-                // Add metadata
-                server.env = {
-                    ...server.env || {},
-                    [MCPDefenderEnvVar.OriginalUrl]: originalUrl,
-                    [MCPDefenderEnvVar.AppName]: effectiveAppName,
-                    [MCPDefenderEnvVar.ServerName]: key
-                };
+                    // Add metadata
+                    server.env = {
+                        ...server.env || {},
+                        [MCPDefenderEnvVar.OriginalUrl]: originalUrl,
+                        [MCPDefenderEnvVar.AppName]: effectiveAppName,
+                        [MCPDefenderEnvVar.ServerName]: key
+                    };
+                } else {
+                    logger.debug(`Skipping SSE server protection (disabled): ${key}, URL: ${server.url}`);
+                    // Leave SSE server unchanged when proxying is disabled
+                }
             }
 
-            // Handle STDIO servers
+            // Handle STDIO servers (always protected regardless of SSE setting)
             if ('command' in server) {
                 // Store original command and args
                 const originalCommand = server.command;
@@ -388,15 +394,16 @@ export abstract class BaseMCPConfiguration {
      * Process a configuration file for protection
      * Reads, unprotects, protects, and writes back the configuration
      * @param appName Optional application name for context
+     * @param enableSSEProxying Whether to proxy SSE transports (default: true for backwards compatibility)
      */
-    async processConfigFile(appName?: string): Promise<{
+    async processConfigFile(appName?: string, enableSSEProxying: boolean = true): Promise<{
         success: boolean,
         message: string,
         servers?: ProtectedServerConfig[]
     }> {
         try {
             const configPath = this.getConfigPath();
-            logger.info(`Processing config file: ${configPath} for app: ${appName || 'unknown'}`);
+            logger.info(`Processing config file: ${configPath} for app: ${appName || 'unknown'}, SSE proxying: ${enableSSEProxying}`);
 
             // Read current config
             const appConfig = await this.readConfig(configPath);
@@ -427,7 +434,7 @@ export abstract class BaseMCPConfiguration {
 
             // Step 2: Protect the config (clean slate approach)
             logger.debug(`Re-protecting configuration`);
-            const protectedMcpConfig = this.protectConfig(unprotectedMcpConfig, appName);
+            const protectedMcpConfig = this.protectConfig(unprotectedMcpConfig, appName, enableSSEProxying);
 
             // Step 3: Merge back into app-specific format
             const updatedAppConfig = this.mergeMCPConfig(appConfig, protectedMcpConfig);
