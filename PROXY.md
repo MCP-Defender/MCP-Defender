@@ -13,7 +13,7 @@ Client Configuration:
 {
   "mcpServers": {
     "everything": {
-      "url": "http://localhost:8081/everything/sse",
+      "url": "http://localhost:28173/everything/sse",
       "env": {}
     }
   }
@@ -30,7 +30,7 @@ Client Configuration:
 {
   "mcpServers": {
     "everything": {
-      "url": "http://localhost:8081/everything",
+      "url": "http://localhost:28173/everything",
       "env": {}
     }
   }

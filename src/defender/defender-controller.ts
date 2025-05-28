@@ -28,7 +28,7 @@ import { ScanMode } from '../services/settings/types';
 // Server configuration
 // TODO: get this from settings later
 const SERVER_CONFIG = {
-  port: 8081,
+  port: 28173,
   host: '127.0.0.1'
 };
 

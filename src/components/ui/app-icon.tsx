@@ -1,5 +1,5 @@
-import React from 'react';
-import { AppNameToIconPath, getAppInitials } from '@/utils/icons';
+import React, { useState, useEffect } from 'react';
+import { getAppIconPath, getAppInitials } from '@/utils/icons';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 interface AppIconProps {
@@ -17,6 +17,9 @@ export function AppIcon({
     size = 'md',
     className = ''
 }: AppIconProps) {
+    const [iconPath, setIconPath] = useState<string | undefined>(undefined);
+    const [isLoading, setIsLoading] = useState(true);
+
     // Size mapping
     const sizeClass = {
         'sm': 'h-6 w-6',
@@ -24,18 +27,41 @@ export function AppIcon({
         'lg': 'h-10 w-10'
     }[size];
 
-    // Determine the icon source
-    const iconPath = AppNameToIconPath[appName];
-
     // Get initials for fallback
     const initials = getAppInitials(appName);
 
+    // Load the icon path asynchronously
+    useEffect(() => {
+        let mounted = true;
+
+        const loadIconPath = async () => {
+            try {
+                const resolvedPath = await getAppIconPath(appName);
+                if (mounted) {
+                    setIconPath(resolvedPath);
+                    setIsLoading(false);
+                }
+            } catch (error) {
+                console.error('Failed to load icon path for', appName, error);
+                if (mounted) {
+                    setIconPath(undefined);
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadIconPath();
+
+        return () => {
+            mounted = false;
+        };
+    }, [appName]);
+
     return (
         <Avatar className={`${sizeClass} ${className}`}>
-            {/* Always use either the custom icon or our default/app-specific icon */}
-
-            {iconPath ? (
-                <AvatarImage src={iconPath} />
+            {/* Show icon if loaded and available, otherwise show fallback */}
+            {!isLoading && iconPath ? (
+                <AvatarImage src={iconPath} alt={`${appName} icon`} />
             ) : (
                 <AvatarFallback>{initials}</AvatarFallback>
             )}

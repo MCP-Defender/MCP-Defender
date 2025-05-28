@@ -235,3 +235,9 @@ contextBridge.exposeInMainWorld('securityAPI', {
     return ipcRenderer.send('security-alert-decision', { scanId, allowed, remember });
   }
 });
+
+// Utility API
+contextBridge.exposeInMainWorld('utilityAPI', {
+  // Get the correct path to a resource
+  getResourcePath: (resourcePath: string) => ipcRenderer.invoke('utilityAPI:getResourcePath', resourcePath)
+});

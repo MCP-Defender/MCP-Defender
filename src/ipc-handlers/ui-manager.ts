@@ -720,6 +720,18 @@ export function registerUIHandlers() {
         closeSettingsWindow();
         return true;
     });
+
+    // Register handler for getting resource paths
+    ipcMain.handle('utilityAPI:getResourcePath', async (event, resourcePath: string) => {
+        // Determine the correct path based on the environment
+        if (app.isPackaged) {
+            // In production, resources are in the app bundle's Resources directory
+            return path.join(process.resourcesPath, resourcePath);
+        } else {
+            // In development, use the source path
+            return path.join(app.getAppPath(), 'src', 'assets', resourcePath);
+        }
+    });
 }
 
 /**

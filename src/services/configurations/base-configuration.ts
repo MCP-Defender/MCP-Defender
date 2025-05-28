@@ -18,7 +18,7 @@ const logger = createLogger('BaseConfiguration');
  * This two-step approach simplifies the process and avoids complex conditional logic.
  */
 export abstract class BaseMCPConfiguration {
-    protected proxyPort: number = 8081;
+    protected proxyPort: number = 28173;
     protected cliPath: string;
 
     // App metadata

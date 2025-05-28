@@ -101,12 +101,12 @@ Verification is currently done for tool requests and responses
 8. Approved response is forwarded back to the client
 
 #### SSE Verification Flow
- Client's MCP config is configured to use our MCP defender url instead of the original URL (http://localhost:8081) corresoponds to MCP Defender:
+ Client's MCP config is configured to use our MCP defender url instead of the original URL (http://localhost:28173) corresoponds to MCP Defender:
 ```json
 {
   "mcpServers": {
     "everything": {
-      "url": "http://localhost:8081/everything/sse",
+      "url": "http://localhost:28173/everything/sse",
       "env": {
       }
     }

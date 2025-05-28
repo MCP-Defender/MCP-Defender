@@ -7,7 +7,9 @@
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
+    "package:test": "SKIP_NOTARIZE=true electron-forge package",
     "make": "electron-forge make",
+    "make:test": "SKIP_NOTARIZE=true electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
     "build:cli": "rm -rf dist/bin/cli.js && mkdir -p dist/bin && npx esbuild src/cli.ts --bundle --platform=node --outfile=dist/bin/cli.js && chmod +x dist/bin/cli.js",
