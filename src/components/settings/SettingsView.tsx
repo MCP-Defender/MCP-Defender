@@ -724,6 +724,38 @@ export default function SettingsView({ standalone = false }: SettingsViewProps) 
                                 </div>
                             )}
                         </div>
+
+                        {/* Transport Settings Section - commenting this out for now*/}
+                        {/* <div className="border-t pt-4 space-y-4">
+                            <div>
+                                <Label className="text-base">Transport Settings</Label>
+                                <p className="text-sm text-muted-foreground">
+                                    Configure how MCP communications are handled
+                                </p>
+                            </div>
+                            <div className="flex items-center justify-between space-x-2">
+                                <div>
+                                    <Label htmlFor="enable-sse-proxying" className="text-sm">Enable SSE Proxying</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Proxy Server-Sent Events (SSE) transport through MCP Defender.
+                                        Disable if experiencing connection issues with SSE-based MCP servers.
+                                    </p>
+                                </div>
+                                <Switch
+                                    id="enable-sse-proxying"
+                                    checked={settings.enableSSEProxying}
+                                    onCheckedChange={(checked) => {
+                                        updateSettings({ enableSSEProxying: checked });
+                                    }}
+                                />
+                            </div>
+                            {!settings.enableSSEProxying && (
+                                <div className="mt-2 p-3 bg-blue-50 text-blue-800 rounded-md text-sm">
+                                    <strong>Note:</strong> SSE servers will not be protected when SSE proxying is disabled.
+                                    Only STDIO-based MCP servers will be monitored for security threats.
+                                </div>
+                            )}
+                        </div> */}
                     </div>
                 </CardContent>
             </Card>

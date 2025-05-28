@@ -279,7 +279,8 @@ export class SettingsService extends BaseService {
             notificationSettings: NotificationSettings.CONFIG_UPDATES, // Enable config update notifications by default
             onboardingCompleted: false,
             disabledSignatures: new Set<string>(),
-            startOnLogin: true // Enable start on login by default for security app
+            startOnLogin: true, // Enable start on login by default for security app
+            enableSSEProxying: false // SSE transport is unstable, disabled by default
         };
     }
 
