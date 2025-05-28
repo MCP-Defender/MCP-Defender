@@ -89,11 +89,14 @@ const config: ForgeConfig = {
       }
     ],
     osxSign: {}, // This must exist even if empty for notarization to work.
-    osxNotarize: {
-      appleApiKey: app_store_api_data["APPLE_API_KEY"],
-      appleApiKeyId: app_store_api_data["APPLE_API_KEY_ID"],
-      appleApiIssuer: app_store_api_data["APPLE_API_ISSUER"]
-    },
+    // Only include notarization if SKIP_NOTARIZE is not set
+    ...(process.env.SKIP_NOTARIZE !== 'true' && {
+      osxNotarize: {
+        appleApiKey: app_store_api_data["APPLE_API_KEY"],
+        appleApiKeyId: app_store_api_data["APPLE_API_KEY_ID"],
+        appleApiIssuer: app_store_api_data["APPLE_API_ISSUER"]
+      }
+    }),
   },
   rebuildConfig: {},
   makers: [

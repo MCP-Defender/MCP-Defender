@@ -19,7 +19,7 @@ const CONFIG = {
     // Enable debug mode with --debug flag or MCP_DEBUG=true environment variable
     // Add this to your MCP configuration env section for more detailed logs
     debug: true,
-    defenderPort: 8081,
+    defenderPort: 28173,
     defenderHost: '127.0.0.1',
     // Use environment variable for log dir or default to OS temp directory
     logDir: process.env.MCP_DEFENDER_LOG_DIR || path.join(os.homedir(), '.mcp-defender', 'logs'),

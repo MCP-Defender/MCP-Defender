@@ -33,7 +33,6 @@
       "dependsOrder": "sequence",
       "dependsOn": [
         "Build CLI",
-        "Kill Processes on Port 8081"
       ],
       "problemMatcher": [],
       "group": "build",
@@ -63,20 +62,9 @@
       }
     },
     {
-      "label": "Kill Processes on Port 8081",
-      "type": "shell",
-      "command": "lsof -ti:8081 | xargs kill -9 || echo 'No processes on port 8081'",
-      "presentation": {
-        "reveal": "never",
-        "panel": "shared"
-      },
-      "problemMatcher": []
-    },
-    {
       "label": "Prepare Debug Environment",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "Kill Processes on Port 8081",
         "Build CLI"
       ],
       "problemMatcher": []

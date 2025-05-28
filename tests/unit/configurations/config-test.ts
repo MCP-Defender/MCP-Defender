@@ -144,7 +144,7 @@ describe('Standard MCP Configuration', () => {
 
         // Check for SSE proxy configuration
         const sseServer = processedConfig.mcpServers['test-sse'];
-        assert.ok(sseServer.url.includes('localhost:8081'), 'URL should be proxied to defender port');
+        assert.ok(sseServer.url.includes('localhost:28173'), 'URL should be proxied to defender port');
         assert.ok(sseServer.url.includes('/test-sse/sse'), 'URL should include server name');
         assert.strictEqual(sseServer.env.__MCP_PROXY_ORIGINAL_URL, 'http://localhost:3000/sse', 'Original URL should be stored');
     });
@@ -231,7 +231,7 @@ describe('VSCode MCP Configuration', () => {
 
         // Check for SSE proxy configuration
         const sseServer = processedConfig['mcp.servers']['test-sse'];
-        assert.ok(sseServer.url.includes('localhost:8081'), 'URL should be proxied to defender port');
+        assert.ok(sseServer.url.includes('localhost:28173'), 'URL should be proxied to defender port');
     });
 
     it('should restore the unprotected VSCode configuration', async () => {

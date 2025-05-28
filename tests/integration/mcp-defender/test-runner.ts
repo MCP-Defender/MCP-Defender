@@ -141,7 +141,7 @@ describe('MCP Defender Integration Tests', () => {
             // Wait for defender to be ready
             const isReady = await waitForProcessReady(
                 defenderProcess,
-                ['running', '8081'],
+                ['running', '28173'],
                 'MCP Defender started successfully',
                 'Timeout waiting for MCP Defender to start',
                 9000,
@@ -262,7 +262,7 @@ describe('MCP Defender Integration Tests', () => {
             // Wait for defender
             const defenderReady = await waitForProcessReady(
                 defenderProcess,
-                ['running', '8081'],
+                ['running', '28173'],
                 'MCP Defender started successfully',
                 'Timeout waiting for MCP Defender to start'
             );
@@ -274,7 +274,7 @@ describe('MCP Defender Integration Tests', () => {
             // Connect client
             client = await createSSEClient({
                 serverName: 'everything',
-                port: 8081,
+                port: 28173,
                 defaultTimeout: 10000
             });
         });

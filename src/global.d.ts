@@ -194,5 +194,11 @@ declare global {
       // Listen for defender state updates
       onStateUpdate: (callback: (state: DefenderState) => void) => () => void;
     }
+
+    // Utility API
+    utilityAPI: {
+      // Get the correct path to a resource
+      getResourcePath: (resourcePath: string) => Promise<string>;
+    }
   }
 } 

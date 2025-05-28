@@ -20,6 +20,7 @@ import ScanDetailView from "./ScanDetailView";
 import SecurityAlertView from "./SecurityAlertView";
 import { Loader2 } from "lucide-react";
 import SettingsView from "./settings/SettingsView";
+import mcpDefenderLogo from "../assets/mcp-defender-logo.png";
 
 // Import types from existing code
 import { DefenderState, DefenderStatus } from "../services/defender/types";
@@ -207,9 +208,24 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary" />
-          <h2 className="text-xl font-medium">Initializing MCP Defender...</h2>
+        <div className="text-center space-y-6">
+          {/* Logo with background effect */}
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-primary/10 rounded-full blur-lg"></div>
+              <img
+                src={mcpDefenderLogo}
+                alt="MCP Defender Logo"
+                className="h-20 w-20 object-contain relative z-10"
+              />
+            </div>
+          </div>
+
+          {/* Loading spinner and text */}
+          <div className="space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            <h2 className="text-xl font-medium">Initializing MCP Defender...</h2>
+          </div>
         </div>
       </div>
     );
