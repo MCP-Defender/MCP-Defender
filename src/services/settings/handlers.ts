@@ -218,7 +218,22 @@ export function registerSettingsHandlers(service: SettingsService): void {
             switch (action) {
                 case 'logged_in':
                     // Call our verify login function directly
-                    return await verifyLogin();
+                    const loginResult = await verifyLogin();
+
+                    // If login verification is successful, automatically set LLM to MCP Defender
+                    if (loginResult.success) {
+                        const currentSettings = settingsService.getSettings();
+                        settingsService.updateSettings({
+                            llm: {
+                                ...currentSettings.llm,
+                                model: 'mcp-defender',
+                                provider: 'mcp-defender'
+                            }
+                        });
+                        console.log('Successfully set LLM provider to MCP Defender after login');
+                    }
+
+                    return loginResult;
 
                 case 'payment_success':
                     // Handle successful payment
