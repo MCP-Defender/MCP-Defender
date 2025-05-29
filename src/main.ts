@@ -37,12 +37,6 @@ let tmpCliPath: string | null = null;
 // https://www.electronforge.io/config/publishers/github#auto-updating-from-github
 updateElectronApp({
   updateInterval: '1 hour',
-  logger: {
-    log: (...args) => logger.debug(...args),
-    info: (...args) => logger.info(...args),
-    warn: (...args) => logger.warn(...args),
-    error: (...args) => logger.error(...args)
-  }
 });
 
 // Protocol handler registration - following Electron docs exactly
