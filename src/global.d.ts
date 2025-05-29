@@ -135,6 +135,9 @@ declare global {
       // Open logs directory
       openLogsDirectory: () => Promise<boolean>;
 
+      // Open external URL in default browser
+      openExternalUrl: (url: string) => Promise<boolean>;
+
       // Save disabled signatures
       saveDisabledSignatures: (signatureIds: string[]) => Promise<boolean>;
 

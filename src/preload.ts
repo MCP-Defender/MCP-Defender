@@ -161,6 +161,8 @@ contextBridge.exposeInMainWorld('settingsAPI', {
 
   openLogsDirectory: () => ipcRenderer.invoke('settingsAPI:openLogsDirectory'),
 
+  openExternalUrl: (url: string) => ipcRenderer.invoke('settingsAPI:openExternalUrl', url),
+
   saveDisabledSignatures: (signatureIds: string[]) =>
     ipcRenderer.invoke('settingsAPI:saveDisabledSignatures', signatureIds),
 

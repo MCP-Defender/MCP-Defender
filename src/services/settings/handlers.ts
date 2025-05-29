@@ -138,6 +138,18 @@ export function registerSettingsHandlers(service: SettingsService): void {
         }
     });
 
+    // Open external URL in default browser
+    ipcMain.handle('settingsAPI:openExternalUrl', async (_, url: string) => {
+        try {
+            // Open the URL in the default browser
+            await shell.openExternal(url);
+            return true;
+        } catch (error) {
+            console.error('[Settings] Failed to open external URL', error);
+            throw error;
+        }
+    });
+
     // Save disabled signatures
     ipcMain.handle('settingsAPI:saveDisabledSignatures', async (_event, signatureIds: string[]) => {
         try {
@@ -218,7 +230,22 @@ export function registerSettingsHandlers(service: SettingsService): void {
             switch (action) {
                 case 'logged_in':
                     // Call our verify login function directly
-                    return await verifyLogin();
+                    const loginResult = await verifyLogin();
+
+                    // If login verification is successful, automatically set LLM to MCP Defender
+                    if (loginResult.success) {
+                        const currentSettings = settingsService.getSettings();
+                        settingsService.updateSettings({
+                            llm: {
+                                ...currentSettings.llm,
+                                model: 'mcp-defender',
+                                provider: 'mcp-defender'
+                            }
+                        });
+                        console.log('Successfully set LLM provider to MCP Defender after login');
+                    }
+
+                    return loginResult;
 
                 case 'payment_success':
                     // Handle successful payment
