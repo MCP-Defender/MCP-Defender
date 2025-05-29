@@ -10,18 +10,10 @@
 <h2 align="center">Automatically protects MCP traffic in AI apps</h2>
 
 <p align="center">
-  <a href="https://github.com/MCP-Defender/MCP-Defender">
-    <img src="https://img.shields.io/github/stars/MCP-Defender/MCP-Defender?style=social" alt="GitHub stars">
-  </a>
-  <a href="https://discord.gg/SqXz6RGU">
-    <img src="https://img.shields.io/discord/1376849284884074526?color=7289DA&label=Discord&logo=discord&logoColor=white" alt="Discord">
-  </a>
-  <a href="https://x.com/MCPDefender">
-    <img src="https://img.shields.io/twitter/follow/MCPDefender?style=social" alt="Twitter Follow">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/MCP-Defender/MCP-Defender" alt="GitHub License">
-  </a>
+  <a href="https://github.com/MCP-Defender/MCP-Defender"><img src="https://img.shields.io/github/stars/MCP-Defender/MCP-Defender?style=social" alt="GitHub stars"></a>
+  <a href="https://discord.gg/SqXz6RGU"><img src="https://img.shields.io/discord/1376849284884074526?color=7289DA&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://x.com/MCPDefender"><img src="https://img.shields.io/twitter/follow/MCPDefender?style=social" alt="Twitter Follow"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/MCP-Defender/MCP-Defender" alt="GitHub License"></a>
 </p>
 
 🛡️  MCP Defender is a desktop application that automatically protects your computer from malicious MCP traffic.
