@@ -138,6 +138,18 @@ export function registerSettingsHandlers(service: SettingsService): void {
         }
     });
 
+    // Open external URL in default browser
+    ipcMain.handle('settingsAPI:openExternalUrl', async (_, url: string) => {
+        try {
+            // Open the URL in the default browser
+            await shell.openExternal(url);
+            return true;
+        } catch (error) {
+            console.error('[Settings] Failed to open external URL', error);
+            throw error;
+        }
+    });
+
     // Save disabled signatures
     ipcMain.handle('settingsAPI:saveDisabledSignatures', async (_event, signatureIds: string[]) => {
         try {

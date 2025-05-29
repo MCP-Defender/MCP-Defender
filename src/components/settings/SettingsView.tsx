@@ -328,8 +328,8 @@ export default function SettingsView({ standalone = false }: SettingsViewProps) 
             const result = await window.accountAPI.createCheckoutLink();
 
             if (result.success && result.url) {
-                // Open the URL in the default browser
-                window.open(result.url, '_blank');
+                // Open the URL in the user's default browser
+                await window.settingsAPI.openExternalUrl(result.url);
                 toast.info("Opening checkout page in your browser");
             } else {
                 console.error("Failed to generate checkout link", result.error);
