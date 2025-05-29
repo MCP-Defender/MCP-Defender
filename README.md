@@ -22,6 +22,9 @@
 
 🔎  The intercepted data is then checked against security signatures - if anything harmful is detected, MCP Defender will alert you and ask if you want to allow or block the tool call from proceeding.
 
+# Demos
+https://github.com/user-attachments/assets/5674bd33-56aa-4b15-a94e-ad561bdee442
+
 # Quick Start
 
 [Download MCP Defender for Mac](https://mcpdefender.com)
@@ -37,7 +40,6 @@ npm install
 # Start app
 npm start
 ```
-# Demos
 
 ## Contributing
 
