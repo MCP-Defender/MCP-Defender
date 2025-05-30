@@ -24,6 +24,25 @@ import { v4 as uuidv4 } from 'uuid';
 // Create a global logger for the main process
 const logger = createLogger('Main');
 
+// ============================================================================
+// UPDATE HANDLING STRATEGY
+// ============================================================================
+// We use a timeout-based approach to handle app updates gracefully:
+// 
+// Normal quit scenario:
+//   - User manually quits the app
+//   - Shutdown sequence completes quickly (under 5 seconds)
+//   - App exits gracefully after restoring unprotected MCP configurations
+//
+// Update scenario:
+//   - update-electron-app triggers a quit to install update
+//   - Update process interferes with our shutdown sequence
+//   - Shutdown times out after 5 seconds → force quit to allow update
+//
+// This approach is more reliable than trying to detect update-specific
+// environment variables or command line arguments, which aren't well documented.
+// ============================================================================
+
 // Track whether we're in the process of shutting down
 let isShuttingDown = false;
 
@@ -37,6 +56,13 @@ let tmpCliPath: string | null = null;
 // https://www.electronforge.io/config/publishers/github#auto-updating-from-github
 updateElectronApp({
   updateInterval: '1 hour',
+  notifyUser: true,
+  logger: {
+    info: (message) => logger.info(`[Updater] ${message}`),
+    warn: (message) => logger.warn(`[Updater] ${message}`),
+    error: (message) => logger.error(`[Updater] ${message}`),
+    log: (message) => logger.info(`[Updater] ${message}`)
+  }
 });
 
 // Protocol handler registration - following Electron docs exactly
@@ -248,9 +274,13 @@ app.on('window-all-closed', () => {
 
 // Clean up resources before quitting
 app.on('before-quit', async (event) => {
+  // Use timeout-based approach to handle updates:
+  // - Normal quit: Shutdown completes quickly (under 5 seconds) and exits gracefully
+  // - Update scenario: Update process interferes with shutdown, causing timeout → force quit
+
   // If we're not already shutting down, start graceful shutdown
   if (!isShuttingDown) {
-    // Prevent the app from quitting until we've restored all configurations
+    // Prevent the app from quitting until we've completed shutdown sequence
     event.preventDefault();
 
     // Set the shutdown flag to prevent further shutdown attempts
@@ -259,8 +289,15 @@ app.on('before-quit', async (event) => {
     // Set the app.isQuitting flag to allow windows to close
     app.isQuitting = true;
 
-    // Start the graceful shutdown process
+    // Start the graceful shutdown process with timeout
     logger.info('Beginning application shutdown sequence...');
+
+    // Set a timeout to force quit if shutdown takes too long
+    // This handles update scenarios where the update process interferes with normal shutdown
+    const shutdownTimeout = setTimeout(() => {
+      logger.warn('Shutdown sequence timed out after 5 seconds, forcing quit (likely due to update)');
+      app.exit(0);
+    }, 5000); // 5 second timeout - sufficient for normal shutdown, catches update interference
 
     try {
       // Stop all services in the correct order
@@ -271,8 +308,12 @@ app.on('before-quit', async (event) => {
       await cleanupTmpCli();
 
       logger.info('Shutdown sequence complete, quitting application.');
+
+      // Clear the timeout since we completed successfully
+      clearTimeout(shutdownTimeout);
     } catch (error) {
       logger.error('Error during shutdown sequence:', error);
+      clearTimeout(shutdownTimeout);
     }
 
     // Now we can quit for real - use app.exit(0) to ensure immediate exit
