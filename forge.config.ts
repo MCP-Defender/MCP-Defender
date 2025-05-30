@@ -82,6 +82,8 @@ const config: ForgeConfig = {
     icon: 'src/assets/1024x1024_logo', // The actual file must have .icns extension, but the .icns is omitted here.
     appBundleId: 'com.mcpdefender.app',
     appCategoryType: 'public.app-category.developer-tools',
+    // Override the name to remove version from filename
+    name: 'MCP Defender',
     protocols: [
       {
         name: 'MCP Defender',
