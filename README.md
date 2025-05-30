@@ -31,7 +31,7 @@ https://github.com/user-attachments/assets/f891148e-babd-4d40-ab96-6c515367a9e3
 
 # Quick Start
 
-[Download MCP Defender for Mac](https://mcpdefender.com)
+[Download MCP Defender for Mac](https://github.com/MCP-Defender/MCP-Defender/releases/latest)
 
 Windows & Linux Coming Soon
 
