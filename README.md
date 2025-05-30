@@ -25,7 +25,8 @@
 🔎  The intercepted data is then checked against security signatures - if anything harmful is detected, MCP Defender will alert you and ask if you want to allow or block the tool call from proceeding.
 
 # Demos
-https://github.com/user-attachments/assets/f891148e-babd-4d40-ab96-6c515367a9e3
+https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
+
 
 
 
