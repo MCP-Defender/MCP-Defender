@@ -48,13 +48,13 @@ const TitleBar: React.FC<TitleBarProps> = ({
   const getDefenderStatusText = () => {
     switch (defenderState.status) {
       case DefenderStatus.running:
-        return "Protection Enabled";
+        return "Enabled";
       case DefenderStatus.starting:
         return "Starting...";
       case DefenderStatus.error:
         return "Error";
       case DefenderStatus.stopped:
-        return "Protection Disabled";
+        return "Disabled";
       default:
         return "Unknown";
     }

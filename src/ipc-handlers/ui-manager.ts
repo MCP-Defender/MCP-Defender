@@ -362,7 +362,7 @@ export async function updateTrayContextMenu(state: DefenderState) {
         // Determine status text and icon
         let statusLabel = '';
         if (state.status === DefenderStatus.running) {
-            statusLabel = '🟢 Protection Enabled';
+            statusLabel = '🟢 Enabled';
         } else if (state.status === DefenderStatus.starting) {
             statusLabel = '🟡 Starting...';
         } else if (state.status === DefenderStatus.error) {
