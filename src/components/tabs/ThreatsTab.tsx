@@ -421,7 +421,7 @@ export default function ThreatsTab() {
                     <div className="flex items-start gap-3">
                         <BarChart3 className="h-6 w-6 text-primary mt-0.5" />
                         <div>
-                            <CardTitle>Threats Trends</CardTitle>
+                            <CardTitle>MCP Traffic</CardTitle>
                             <CardDescription>
                                 {chartData.timeFrameDescription || "No data available"}
                             </CardDescription>
