@@ -52,4 +52,4 @@ We love contributions! Feel free to open issues for bugs or feature requests.
 
 ## License
 
-MCP Defender is [Apache 2.0 licensed](LICENSE).
+MCP Defender is [CC BY-NC-SA 4.0 licensed](LICENSE.txt).
