@@ -92,16 +92,33 @@ export function registerSettingsHandlers(service: SettingsService): void {
                 if (Object.keys(updatedSettings).length > 0 &&
                     (Object.keys(updatedSettings).length > 1 ||
                         (updatedSettings.llm && Object.keys(updatedSettings.llm).length > 0))) {
-                    return settingsService.updateSettings(updatedSettings);
+
+                    // Update settings first, then emit event
+                    const success = settingsService.updateSettings(updatedSettings);
+
+                    if (success) {
+                        // Emit event AFTER settings are saved
+                        ServiceEventBus.emit(ServiceEvent.SETTINGS_UPDATED, updatedSettings);
+                    }
+
+                    return success;
                 }
 
-                // Otherwise we're done
+                // Only API key was updated, emit event for that
+                ServiceEventBus.emit(ServiceEvent.SETTINGS_UPDATED, { llm: { apiKey: 'updated' } });
                 return true;
             }
         }
 
         // Standard settings update with no API key change
-        return settingsService.updateSettings(settings);
+        const success = settingsService.updateSettings(settings);
+
+        if (success) {
+            // Emit event AFTER settings are successfully saved
+            ServiceEventBus.emit(ServiceEvent.SETTINGS_UPDATED, settings);
+        }
+
+        return success;
     });
 
 

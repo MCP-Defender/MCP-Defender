@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { app, BrowserWindow } from 'electron';
-import { BaseService, ServiceEvent } from '../base-service';
+import { BaseService, ServiceEvent, ServiceEventBus } from '../base-service';
 import { BaseMCPConfiguration } from '../configurations/base-configuration';
 import { createLogger } from '../../utils/logger';
 import { spawn } from 'node:child_process';
@@ -108,7 +108,7 @@ export class ConfigurationsService extends BaseService {
         });
 
         // Listen for settings updates to handle secure tools server changes
-        serviceManager.settingsService.on(ServiceEvent.SETTINGS_UPDATED, (settings) => {
+        ServiceEventBus.on(ServiceEvent.SETTINGS_UPDATED, (settings) => {
             this.logger.info('Received settings update, checking for secure tools changes');
             this.handleSecureToolsSettingChange(settings);
         });
