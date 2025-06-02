@@ -22,27 +22,31 @@ export function createConfiguration(
 ): BaseMCPConfiguration {
     const normalizedAppName = appName.toLowerCase().trim();
 
-    logger.info(`Creating configuration for app: ${appName}`);
+    logger.info(`Creating configuration for app: ${appName} (normalized: ${normalizedAppName})`);
 
     // Select the appropriate configuration class based on app name
     switch (normalizedAppName) {
         case 'vscode':
         case 'visual studio code':
+            logger.info('Creating VSCodeMCPConfiguration');
             return new VSCodeMCPConfiguration(cliPath, customConfigPath, iconPath);
 
         case 'cursor':
+            logger.info('Creating CursorConfiguration');
             return new CursorConfiguration(cliPath, customConfigPath, iconPath);
 
         case 'claude':
         case 'claude desktop':
+            logger.info('Creating ClaudeConfiguration');
             return new ClaudeConfiguration(cliPath, customConfigPath, iconPath);
 
         case 'windsurf':
+            logger.info('Creating WindsurfConfiguration');
             return new WindsurfConfiguration(cliPath, customConfigPath, iconPath);
 
         default:
             // For unknown applications, use the generic StandardMCPConfiguration
-            logger.info(`No specific configuration found for ${appName}, using standard configuration`);
+            logger.info(`No specific configuration found for ${appName} (normalized: ${normalizedAppName}), using standard configuration`);
             // By default, unknown applications don't require restart
             const requiresRestart = false;
             return new StandardMCPConfiguration(
