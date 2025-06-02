@@ -178,6 +178,10 @@ export class DefenderService extends BaseService {
                 });
             });
 
+            // this.process.on('message', (message) => {
+            //     this.logger.info('[DEFENDER SERVER]: Received message from defender process:', message);
+            // });
+
             // Set up message handlers
             this.setupProcessHandlers();
 

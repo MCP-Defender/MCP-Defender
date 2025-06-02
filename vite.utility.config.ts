@@ -16,9 +16,42 @@ export default defineConfig({
         minify: false,
         emptyOutDir: false,
         rollupOptions: {
-            // Make sure to preserve the file extension for the MCP server files
+            // Only mark Node.js built-ins as external, bundle npm packages
             external: [
-                /node_modules/,
+                // Node.js built-in modules (these should not be bundled)
+                'node:http',
+                'node:https',
+                'node:url',
+                'node:fs',
+                'node:path',
+                'node:crypto',
+                'node:process',
+                'node:events',
+                'node:util',
+                'node:stream',
+                'node:buffer',
+                'node:os',
+                'node:net',
+                'node:child_process',
+                'node:readline',
+                'node:zlib',
+                'http',
+                'https',
+                'url',
+                'fs',
+                'path',
+                'crypto',
+                'process',
+                'events',
+                'util',
+                'stream',
+                'buffer',
+                'os',
+                'net',
+                'child_process',
+                'readline',
+                'zlib',
+                'electron'
             ]
         }
     },

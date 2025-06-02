@@ -58,7 +58,7 @@ export default defineConfig({
     build: {
         sourcemap: true,
         rollupOptions: {
-            external: ['electron']
+            external: ['electron', 'sqlite3']
         }
     },
     // Ensure we preserve environment variables through Vite's bundling

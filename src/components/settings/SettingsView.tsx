@@ -760,6 +760,40 @@ export default function SettingsView({ standalone = false }: SettingsViewProps) 
                 </CardContent>
             </Card>
 
+            {/* MCP Secure Tools Card */}
+            <Card className="mb-4">
+                <CardHeader>
+                    <div className="flex items-start gap-3">
+                        <Shield className="h-6 w-6 text-primary mt-0.5" />
+                        <div>
+                            <CardTitle>MCP Secure Tools</CardTitle>
+                            <CardDescription>
+                                Enable MCP Defender's built-in secure tools for common operations like file system access,
+                                web requests, and system commands with enhanced security verification
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between space-x-2">
+                        <div>
+                            <Label htmlFor="use-secure-tools" className="text-sm">Use MCP Defender Secure Tools</Label>
+                            <p className="text-xs text-muted-foreground">
+                                Automatically include MCP Defender's secure tools server in your MCP configuration.
+                                These tools provide safer alternatives to standard file, network, and system operations.
+                            </p>
+                        </div>
+                        <Switch
+                            id="use-secure-tools"
+                            checked={settings.useMCPDefenderSecureTools}
+                            onCheckedChange={(checked) => {
+                                updateSettings({ useMCPDefenderSecureTools: checked });
+                            }}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* General Settings Card */}
             <Card className="mb-4">
                 <CardHeader>
