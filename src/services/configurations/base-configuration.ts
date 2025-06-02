@@ -432,9 +432,13 @@ export abstract class BaseMCPConfiguration {
             logger.debug(`Unprotecting configuration`);
             const unprotectedMcpConfig = this.unprotectConfig(mcpConfig);
 
+            // Step 1.5: Inject secure tools server if setting is enabled
+            logger.debug(`Checking for secure tools server injection`);
+            const configWithSecureTools = this.injectSecureToolsServer(unprotectedMcpConfig);
+
             // Step 2: Protect the config (clean slate approach)
             logger.debug(`Re-protecting configuration`);
-            const protectedMcpConfig = this.protectConfig(unprotectedMcpConfig, appName, enableSSEProxying);
+            const protectedMcpConfig = this.protectConfig(configWithSecureTools, appName, enableSSEProxying);
 
             // Step 3: Merge back into app-specific format
             const updatedAppConfig = this.mergeMCPConfig(appConfig, protectedMcpConfig);
@@ -505,6 +509,14 @@ export abstract class BaseMCPConfiguration {
         const serverCount = Object.keys(unprotectedConfig.mcpServers || {}).length;
         logger.debug(`Unprotecting ${serverCount} servers`);
 
+        // Remove MCP Defender Secure Tools server if it exists
+        // This server should only be present when MCP Defender is running
+        const secureToolsServerName = 'mcp-defender-secure-tools';
+        if (unprotectedConfig.mcpServers && unprotectedConfig.mcpServers[secureToolsServerName]) {
+            delete unprotectedConfig.mcpServers[secureToolsServerName];
+            logger.debug('Removed MCP Defender Secure Tools server from unprotected configuration');
+        }
+
         // Process each server configuration
         for (const [key, server] of Object.entries(unprotectedConfig.mcpServers)) {
             // Handle SSE servers (URL-based)
@@ -570,5 +582,74 @@ export abstract class BaseMCPConfiguration {
         }
 
         return unprotectedConfig;
+    }
+
+    /**
+     * Inject MCP Defender Secure Tools server if the setting is enabled
+     * @param config MCP configuration to modify
+     * @returns Modified configuration with secure tools server if enabled
+     */
+    injectSecureToolsServer(config: MCPConfig): MCPConfig {
+        // Get settings from service manager to check if secure tools should be enabled
+        try {
+            // Access the service manager through the global process object to avoid bundling issues
+            const serviceManagerInstance = (global as any).__SERVICE_MANAGER_INSTANCE__;
+            if (!serviceManagerInstance) {
+                this.logger.warn('ServiceManager not available for secure tools injection');
+                return config;
+            }
+
+            const settings = serviceManagerInstance.settingsService.getSettings();
+
+            if (!settings.useMCPDefenderSecureTools) {
+                // Setting is disabled, return config as-is
+                this.logger.debug('MCP Defender Secure Tools setting is disabled');
+                return config;
+            }
+
+            this.logger.info('Injecting MCP Defender Secure Tools server into configuration');
+
+            // Create a copy of the config to avoid modifying the original
+            const modifiedConfig: MCPConfig = JSON.parse(JSON.stringify(config));
+
+            // Ensure mcpServers object exists
+            if (!modifiedConfig.mcpServers) {
+                modifiedConfig.mcpServers = {};
+            }
+
+            // Add the secure tools server if it doesn't already exist
+            const secureToolsServerName = 'mcp-defender-secure-tools';
+            if (!modifiedConfig.mcpServers[secureToolsServerName]) {
+                // Use configurable path for the secure tools server
+                // Priority: ENV var > relative path > hardcoded fallback
+                let secureToolsPath = process.env.MCP_DEFENDER_SECURE_TOOLS_PATH;
+
+                if (!secureToolsPath) {
+                    // Try relative path from app directory (for development)
+                    const { app } = require('electron');
+                    const path = require('path');
+                    secureToolsPath = path.join(app.getAppPath(), '..', 'MCP-Defender-Secure-Tools', 'index.ts');
+                }
+
+                // Fallback to hardcoded path for now (will be replaced by npx in future)
+                if (!secureToolsPath) {
+                    secureToolsPath = '/Users/sau/Code/MCP-Defender-Code/MCP-Defender-Secure-Tools/index.ts';
+                }
+
+                modifiedConfig.mcpServers[secureToolsServerName] = {
+                    command: 'node',
+                    args: [secureToolsPath],
+                    env: {}
+                };
+                this.logger.info(`Added MCP Defender Secure Tools server to configuration: ${secureToolsPath}`);
+            } else {
+                this.logger.debug('MCP Defender Secure Tools server already exists in configuration');
+            }
+
+            return modifiedConfig;
+        } catch (error) {
+            this.logger.error('Failed to inject secure tools server:', error);
+            return config; // Return original config on error
+        }
     }
 } 

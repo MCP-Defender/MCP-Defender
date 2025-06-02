@@ -280,7 +280,8 @@ export class SettingsService extends BaseService {
             onboardingCompleted: false,
             disabledSignatures: new Set<string>(),
             startOnLogin: true, // Enable start on login by default for security app
-            enableSSEProxying: false // SSE transport is unstable, disabled by default
+            enableSSEProxying: false, // SSE transport is unstable, disabled by default
+            useMCPDefenderSecureTools: false // MCP Defender Secure Tools disabled by default
         };
     }
 

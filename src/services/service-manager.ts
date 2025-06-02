@@ -37,6 +37,9 @@ export class ServiceManager {
         if (!ServiceManager.instance) {
             ServiceManager.instance = new ServiceManager();
             ServiceManager.instance.initialize();
+
+            // Set a global reference to avoid bundling issues with require()
+            (global as any).__SERVICE_MANAGER_INSTANCE__ = ServiceManager.instance;
         }
         return ServiceManager.instance;
     }

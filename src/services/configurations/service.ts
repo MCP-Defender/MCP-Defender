@@ -107,6 +107,12 @@ export class ConfigurationsService extends BaseService {
             this.notifyDefenderAndWebContents();
         });
 
+        // Listen for settings updates to handle secure tools server changes
+        serviceManager.settingsService.on(ServiceEvent.SETTINGS_UPDATED, (settings) => {
+            this.logger.info('Received settings update, checking for secure tools changes');
+            this.handleSecureToolsSettingChange(settings);
+        });
+
         // Listen directly to the DefenderService for tool updates
         serviceManager.defenderService.on(DefenderServiceEvent.TOOLS_UPDATE, (toolsData) => {
             this.logger.info(`Received tools update for ${toolsData.appName}/${toolsData.serverName}`);
@@ -1148,5 +1154,38 @@ export class ConfigurationsService extends BaseService {
         notification.consolidatedConfigUpdates(updates);
 
         this.logger.info(`Sent consolidated notification for ${updates.length} application updates`);
+    }
+
+    /**
+     * Handle settings updates to handle secure tools server changes
+     * @param settings The updated settings
+     */
+    private handleSecureToolsSettingChange(settings: any): void {
+        if (settings && typeof settings.useMCPDefenderSecureTools !== 'undefined') {
+            this.logger.info(`Secure tools setting changed to: ${settings.useMCPDefenderSecureTools}`);
+
+            // Reprocess all applications to add/remove the secure tools server
+            this.processAllConfigurations();
+        }
+    }
+
+    /**
+     * Reprocess all application configurations
+     * This is used when settings change that affect configuration processing
+     */
+    private async processAllConfigurations(): Promise<void> {
+        this.logger.info('Reprocessing all application configurations due to settings change');
+
+        for (const [appName, app] of this.applications.entries()) {
+            try {
+                await this.processConfig(appName);
+                this.logger.info(`Successfully reprocessed configuration for ${appName}`);
+            } catch (error) {
+                this.logger.error(`Failed to reprocess configuration for ${appName}:`, error);
+            }
+        }
+
+        // Notify about the updates
+        this.notifyDefenderAndWebContents();
     }
 }
