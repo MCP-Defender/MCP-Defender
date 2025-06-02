@@ -121,7 +121,15 @@ export class CursorConfiguration extends StandardMCPConfiguration {
      */
     private async updateAIContextRules(): Promise<void> {
         try {
-            logger.info('Checking secure tools setting for AI context rule update...');
+            // Check if we're on macOS - AI context rule modification is only supported on macOS
+            const platform = os.platform();
+            if (platform !== 'darwin') {
+                logger.info(`AI context rule update not implemented for platform: ${platform}`);
+                // TODO: Implement AI context rule management for Windows and Linux
+                return;
+            }
+
+            logger.info('Checking secure tools setting for AI context rule update on macOS...');
 
             // Access the global ServiceManager instance
             const serviceManagerInstance = (global as any).__SERVICE_MANAGER_INSTANCE__;
@@ -148,8 +156,18 @@ export class CursorConfiguration extends StandardMCPConfiguration {
 
     /**
      * Add the MCP Defender context rule to Cursor's AI context
+     * Currently only supports macOS - Windows and Linux not implemented
      */
     private async addAIContextRule(): Promise<void> {
+        // Check platform before proceeding
+        const platform = os.platform();
+        if (platform !== 'darwin') {
+            logger.info(`AI context rule addition not implemented for platform: ${platform}`);
+            // TODO: Implement for Windows (AppData\Roaming\Cursor\User\globalStorage\state.vscdb)
+            // TODO: Implement for Linux (~/.config/Cursor/User/globalStorage/state.vscdb)
+            return Promise.resolve();
+        }
+
         return new Promise((resolve, reject) => {
             // Check if database file exists
             fs.access(this.dbPath).then(async () => {
@@ -218,8 +236,18 @@ export class CursorConfiguration extends StandardMCPConfiguration {
 
     /**
      * Remove the MCP Defender context rule from Cursor's AI context
+     * Currently only supports macOS - Windows and Linux not implemented
      */
     private async removeAIContextRule(): Promise<void> {
+        // Check platform before proceeding
+        const platform = os.platform();
+        if (platform !== 'darwin') {
+            logger.info(`AI context rule removal not implemented for platform: ${platform}`);
+            // TODO: Implement for Windows (AppData\Roaming\Cursor\User\globalStorage\state.vscdb)
+            // TODO: Implement for Linux (~/.config/Cursor/User/globalStorage/state.vscdb)
+            return Promise.resolve();
+        }
+
         return new Promise((resolve, reject) => {
             // Check if database file exists
             fs.access(this.dbPath).then(async () => {
