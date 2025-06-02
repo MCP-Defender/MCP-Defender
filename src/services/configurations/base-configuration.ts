@@ -620,28 +620,13 @@ export abstract class BaseMCPConfiguration {
             // Add the secure tools server if it doesn't already exist
             const secureToolsServerName = 'mcp-defender-secure-tools';
             if (!modifiedConfig.mcpServers[secureToolsServerName]) {
-                // Use configurable path for the secure tools server
-                // Priority: ENV var > relative path > hardcoded fallback
-                let secureToolsPath = process.env.MCP_DEFENDER_SECURE_TOOLS_PATH;
-
-                if (!secureToolsPath) {
-                    // Try relative path from app directory (for development)
-                    const { app } = require('electron');
-                    const path = require('path');
-                    secureToolsPath = path.join(app.getAppPath(), '..', 'MCP-Defender-Secure-Tools', 'index.ts');
-                }
-
-                // Fallback to hardcoded path for now (will be replaced by npx in future)
-                if (!secureToolsPath) {
-                    secureToolsPath = '/Users/sau/Code/MCP-Defender-Code/MCP-Defender-Secure-Tools/index.ts';
-                }
-
+                // Use the published npm package via npx
                 modifiedConfig.mcpServers[secureToolsServerName] = {
-                    command: 'node',
-                    args: [secureToolsPath],
+                    command: 'npx',
+                    args: ['-y', '@mcp-defender/mcp-defender-secure-tools'],
                     env: {}
                 };
-                this.logger.info(`Added MCP Defender Secure Tools server to configuration: ${secureToolsPath}`);
+                this.logger.info('Added MCP Defender Secure Tools server to configuration using published package');
             } else {
                 this.logger.debug('MCP Defender Secure Tools server already exists in configuration');
             }
