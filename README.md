@@ -22,7 +22,9 @@
 
 🚦 All MCP tool call requests and responses from AI apps are automatically proxied through MCP Defender.
 
-🔎  The intercepted data is then checked against security signatures - if anything harmful is detected, MCP Defender will alert you and ask if you want to allow or block the tool call from proceeding.
+🔎  The intercepted data is then checked against a set of signatures.
+
+🔐  If anything harmful is detected, MCP Defender alerts you and asks if you want to allow or block the tool call.
 
 # Demos
 https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
