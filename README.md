@@ -18,9 +18,9 @@
 
 
 
-🛡️  MCP Defender is a desktop application that automatically protects your computer from malicious MCP traffic.
+🛡️  MCP Defender is a desktop app that protects AI apps like Cursor from a variety of attacks.
 
-🚦 All MCP tool call requests and responses from AI apps like Cursor, Claude and Windsurf are automatically proxied through MCP Defender.
+🚦 All MCP tool call requests and responses from AI apps are automatically proxied through MCP Defender.
 
 🔎  The intercepted data is then checked against security signatures - if anything harmful is detected, MCP Defender will alert you and ask if you want to allow or block the tool call from proceeding.
 
@@ -29,6 +29,10 @@ https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
 
 
 
+
+# Client Support
+
+Currently MCP Defender automatically protects Cursor, Cluade, VS Code and Windsurf, with more apps coming soon!
 
 # Quick Start
 
