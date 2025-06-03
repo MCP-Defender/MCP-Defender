@@ -31,13 +31,6 @@ https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
 
 
 
-
-# Client Support
-
-Currently MCP Defender automatically protects Cursor, Claude, Visual Studio Code and Windsurf.
-
-Protection for more AI apps coming soon!
-
 # Quick Start
 
 [Download MCP Defender for Mac](https://github.com/MCP-Defender/MCP-Defender/releases/latest)
@@ -53,6 +46,12 @@ npm install
 # Start app
 npm start
 ```
+
+## Which apps are protected?
+
+Currently MCP Defender automatically protects Cursor, Claude, Visual Studio Code and Windsurf.
+
+Protection for more AI apps coming soon!
 
 ## Contributing
 
