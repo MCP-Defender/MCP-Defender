@@ -47,11 +47,11 @@ npm install
 npm start
 ```
 
-## Which apps are protected?
+## Which apps are automatically protected?
 
-Currently MCP Defender automatically protects Cursor, Claude, Visual Studio Code and Windsurf.
+MCP Defender protects Cursor, Claude, Visual Studio Code and Windsurf.
 
-Protection for more AI apps coming soon!
+Protection for more apps coming soon!
 
 ## Contributing
 
