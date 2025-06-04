@@ -17,11 +17,10 @@ export function ActivationScreen({ email, onActivate, isLoading = false }: Activ
     };
 
     return (
-        <div className="flex flex-col max-w-md mx-auto p-6 space-y-8">
+        <div className="flex flex-col items-center justify-center min-h-screen max-w-md mx-auto p-6 space-y-8">
             {/* Header Section */}
             <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold tracking-tight">Email Verified</h1>
-                <p className="text-muted-foreground text-lg">Your account is ready</p>
             </div>
 
             {/* Main Icon */}
@@ -37,8 +36,7 @@ export function ActivationScreen({ email, onActivate, isLoading = false }: Activ
             {/* Message */}
             <div className="text-center">
                 <p className="leading-relaxed">
-                    Your email <span className="font-medium">{email}</span> has been verified successfully.
-                    <br />You're now ready to use MCP Defender.
+                    Your email has been verified successfully.
                 </p>
             </div>
 
@@ -56,7 +54,7 @@ export function ActivationScreen({ email, onActivate, isLoading = false }: Activ
                     </>
                 ) : (
                     <>
-                        Continue to MCP Defender
+                        Start MCP Defender
                         <ArrowRight className="ml-2 h-5 w-5" />
                     </>
                 )}

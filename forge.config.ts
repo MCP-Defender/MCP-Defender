@@ -76,6 +76,7 @@ const config: ForgeConfig = {
       './src/assets/IconTemplate@2x.png',
       './src/assets/1024x1024_logo.icns',
       './src/assets/mcp_app_icons',
+      './src/assets/logo_without_icon.png',
       './signatures',
       './dist/bin/cli.js' // CLI helper will be at Contents/Resources/cli.js
     ],

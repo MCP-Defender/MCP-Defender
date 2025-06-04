@@ -41,7 +41,6 @@ export function OnboardingRoot() {
                     // Move to activation screen
                     setCurrentStep(OnboardingStep.Activation);
                     setProcessStatus(ProcessStatus.Success);
-                    toast.success("Email verification successful");
                 } else {
                     console.error("Login verification failed:", result.error);
                     setError("Login verification failed. Please try again.");
@@ -159,7 +158,6 @@ export function OnboardingRoot() {
                         // Move to activation screen just like when we receive a deep link
                         setCurrentStep(OnboardingStep.Activation);
                         setProcessStatus(ProcessStatus.Success);
-                        toast.success("Email verification successful");
                     }}
                 />
             );
