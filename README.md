@@ -59,4 +59,4 @@ We love contributions! Feel free to open issues for bugs or feature requests.
 
 ## License
 
-MCP Defender OpenObserve is licensed under the AGPL-3.0 license. For more details, see the [LICENSE](LICENSE.md).
+MCP Defender OpenObserve is licensed under the AGPL-3.0 license. For more details, see the [LICENSE](LICENSE).
