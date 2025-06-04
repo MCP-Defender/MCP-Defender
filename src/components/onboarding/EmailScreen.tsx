@@ -52,7 +52,6 @@ export function EmailScreen({
                 const result = await window.accountAPI.login(email);
 
                 if (result.success) {
-                    toast.success("Login link sent successfully");
                     onEmailSubmit(email);
                 } else {
                     const errorMessage = result.error || "Failed to send login email. Please try again.";
@@ -71,15 +70,15 @@ export function EmailScreen({
     };
 
     return (
-        <div className="flex flex-col max-w-lg mx-auto p-6 space-y-8">
+        <div className="flex flex-col items-center justify-center min-h-screen max-w-3xl mx-auto p-6 space-y-8">
             {/* Header Section */}
             <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold tracking-tight">Login</h1>
-                <p className="text-muted-foreground">Enter email to create an account or login to an existing account</p>
+                <p className="text-muted-foreground">Enter your email to get started</p>
             </div>
 
             {/* Form Section */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5 w-full max-w-sm">
                 <div className="space-y-2">
                     <Label htmlFor="email" className="text-base">Email Address</Label>
                     <Input
@@ -105,7 +104,7 @@ export function EmailScreen({
             {/* Skip Option */}
             <div className="border-t border-border pt-6 space-y-4">
                 <p className="text-center text-sm text-muted-foreground">
-                    Advanced users can configure API keys directly
+                    Advanced: Use your own LLM API keys
                 </p>
                 <div className="flex justify-center">
                     <Button
@@ -123,22 +122,6 @@ export function EmailScreen({
                     </Button>
                 </div>
             </div>
-
-            {/* Back Button */}
-            {onBack && (
-                <div className="pt-2">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="flex items-center"
-                        onClick={onBack}
-                        disabled={isLoading}
-                    >
-                        <ArrowLeft className="mr-1 h-4 w-4" />
-                        Back to welcome
-                    </Button>
-                </div>
-            )}
         </div>
     );
 } 

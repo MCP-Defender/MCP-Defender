@@ -118,24 +118,23 @@ export function EmailSentScreen({
     };
 
     return (
-        <div className="flex flex-col max-w-md mx-auto p-6 space-y-8">
+        <div className="flex flex-col items-center justify-center min-h-screen max-w-md mx-auto p-6 space-y-8">
             {/* Header Section */}
             <div className="text-center space-y-2">
                 <h1 className="text-3xl font-bold tracking-tight">Verify Email</h1>
-                <p className="text-muted-foreground text-lg">Verification link sent</p>
             </div>
 
             {/* Email Info */}
             <div className="text-center">
                 <p className="leading-relaxed">
                     We've sent a login link to <span className="font-medium">{email}</span>.
-                    <br />Click the link in the email to continue setup.
+                    <br />Click the link in the email to finish setup.
                 </p>
             </div>
 
             {/* Alert */}
             <Alert className="bg-muted/50 border border-border">
-                <AlertDescription className="text-sm">
+                <AlertDescription className="text-sm text-center">
                     If you don't see the email, check your spam folder.
                 </AlertDescription>
             </Alert>
