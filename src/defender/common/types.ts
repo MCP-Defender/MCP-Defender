@@ -9,7 +9,14 @@ import { ScanMode } from '../../services/settings/types';
  * Interface for scan settings that control verification behavior
  */
 export interface ScanSettings {
-    mode: ScanMode;
+    scanMode: ScanMode;
+    loginToken: string | null;
+    llm: {
+        model: string;
+        apiKey: string | null;
+        provider: string;
+    };
+    disabledSignatures: Set<string>;
 }
 
 /**
@@ -86,16 +93,7 @@ export interface DefenderState {
     running: boolean;
     serverTools?: Map<string, ServerToolsInfo>; // Store tool information by app:server key
     protectedServers: Map<string, ProtectedServerConfig[]>; // Store server configs by app name
-    settings: {
-        scanMode: ScanMode;
-        loginToken: string;
-        llm: {
-            model: string;
-            apiKey: string;
-            provider: string;
-        };
-        disabledSignatures: Set<string>;
-    };
+    settings: ScanSettings;
 }
 
 /**

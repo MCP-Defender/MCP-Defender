@@ -12,21 +12,22 @@
 <p align="center">
   <a href="https://github.com/MCP-Defender/MCP-Defender"><img src="https://img.shields.io/github/stars/MCP-Defender/MCP-Defender?style=social" alt="GitHub stars"></a>
   <a href="https://discord.gg/SqXz6RGU"><img src="https://img.shields.io/discord/1376849284884074526?color=7289DA&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://x.com/MCPDefender"><img src="https://img.shields.io/twitter/follow/MCPDefender?style=social" alt="Twitter Follow"></a>
+  <a href="https://x.com/mcp_defender"><img src="https://img.shields.io/twitter/follow/mcp_defender?style=social" alt="Twitter Follow"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/MCP-Defender/MCP-Defender" alt="GitHub License"></a>
 </p>
 
 
 
-🛡️  MCP Defender is a desktop application that automatically protects your computer from malicious MCP traffic.
+🛡️  MCP Defender is a desktop app that protects AI apps like Cursor from a variety of attacks.
 
-🚦 All MCP tool call requests and responses from AI apps like Cursor, Claude and Windsurf are automatically proxied through MCP Defender.
+🚦 All MCP tool call requests and responses from AI apps are automatically proxied through MCP Defender.
 
-🔎  The intercepted data is then checked against security signatures - if anything harmful is detected, MCP Defender will alert you and ask if you want to allow or block the tool call from proceeding.
+🔎  The intercepted data is then checked against a set of signatures.
+
+🔐  If anything harmful is detected, MCP Defender alerts you and asks if you want to allow or block the tool call.
 
 # Demos
 https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
-
 
 
 
@@ -46,10 +47,16 @@ npm install
 npm start
 ```
 
+## Which apps are automatically protected?
+
+MCP Defender protects Cursor, Claude, Visual Studio Code and Windsurf.
+
+Protection for more apps coming soon!
+
 ## Contributing
 
 We love contributions! Feel free to open issues for bugs or feature requests.
 
 ## License
 
-MCP Defender is [CC BY-NC-SA 4.0 licensed](LICENSE.txt).
+MCP Defender is licensed under the AGPL-3.0 license. For more details, see the [LICENSE](LICENSE).
