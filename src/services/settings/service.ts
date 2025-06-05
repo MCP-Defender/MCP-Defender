@@ -275,13 +275,13 @@ export class SettingsService extends BaseService {
                 apiKey: "",
                 provider: ""
             },
-            scanMode: ScanMode.REQUEST_RESPONSE,
+            scanMode: ScanMode.REQUEST_ONLY,
             notificationSettings: NotificationSettings.CONFIG_UPDATES, // Enable config update notifications by default
             onboardingCompleted: false,
             disabledSignatures: new Set<string>(),
             startOnLogin: true, // Enable start on login by default for security app
             enableSSEProxying: false, // SSE transport is unstable, disabled by default
-            useMCPDefenderSecureTools: true // MCP Defender Secure Tools enabled by default
+            useMCPDefenderSecureTools: false // MCP Defender Secure Tools enabled by default
         };
     }
 
