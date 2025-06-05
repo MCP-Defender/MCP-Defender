@@ -128,32 +128,44 @@ export default function AppTab() {
                         <span className="ml-2">Loading applications...</span>
                     </div>
                 ) : (
-                    /* Render each application card */
-                    applications.map(app => (
-                        <Card key={app.name} className={app.status === ProtectionStatus.Protected ? "border-green-500" : ""}>
-                            <CardHeader>
-                                <div className="flex flex-row justify-between">
-                                    <div className="flex flex-row gap-2">
-                                        <AppIcon appName={app.name} />
-                                        <div className="flex flex-col">
-                                            <div className="text font-semibold">
-                                                {app.name}
-                                            </div>
-                                            <div className="flex flex-row items-center gap-2 pt-2">
-                                                <StatusBadge
-                                                    status={app.status}
-                                                    message={app.statusMessage}
-                                                />
+                    /* Render each application card - sorted to show Protected apps first */
+                    applications
+                        .sort((a, b) => {
+                            // Sort Protected status first, then by app name
+                            if (a.status === ProtectionStatus.Protected && b.status !== ProtectionStatus.Protected) {
+                                return -1; // a comes first
+                            }
+                            if (b.status === ProtectionStatus.Protected && a.status !== ProtectionStatus.Protected) {
+                                return 1; // b comes first
+                            }
+                            // If both have same protection status, sort alphabetically by name
+                            return a.name.localeCompare(b.name);
+                        })
+                        .map(app => (
+                            <Card key={app.name} className={app.status === ProtectionStatus.Protected ? "border-green-500" : ""}>
+                                <CardHeader>
+                                    <div className="flex flex-row justify-between">
+                                        <div className="flex flex-row gap-2">
+                                            <AppIcon appName={app.name} />
+                                            <div className="flex flex-col">
+                                                <div className="text font-semibold">
+                                                    {app.name}
+                                                </div>
+                                                <div className="flex flex-row items-center gap-2 pt-2">
+                                                    <StatusBadge
+                                                        status={app.status}
+                                                        message={app.statusMessage}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </CardHeader>
-                            {app.servers.length > 0 && (
-                                <MCPServerCards servers={app.servers} />
-                            )}
-                        </Card>
-                    ))
+                                </CardHeader>
+                                {app.servers.length > 0 && (
+                                    <MCPServerCards servers={app.servers} />
+                                )}
+                            </Card>
+                        ))
                 )}
             </div>
         </div>
@@ -171,6 +183,9 @@ const StatusBadge = ({ status, message }: { status: ProtectionStatus, message?: 
         )}
         {status === ProtectionStatus.Error && (
             <Badge variant="destructive">Error</Badge>
+        )}
+        {status === ProtectionStatus.NotFound && (
+            <Badge variant="outline" className="bg-grey-100 text-grey-800 border-grey-300">Not Found</Badge>
         )}
 
         {message && (

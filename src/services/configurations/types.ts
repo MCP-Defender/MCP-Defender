@@ -94,6 +94,7 @@ export interface ProtectedServerConfig {
 export enum ProtectionStatus {
     Loading = "Loading",
     Protected = "Protected",
+    NotFound = "NotFound",
     Error = "Error"
 }
 
@@ -135,4 +136,5 @@ export interface ConfigOperationResult {
     success: boolean;
     message: string;
     servers?: ProtectedServerConfig[];
+    isNotFound?: boolean;
 }

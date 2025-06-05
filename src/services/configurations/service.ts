@@ -770,7 +770,12 @@ export class ConfigurationsService extends BaseService {
                     }
                 }
             } else {
-                this.updateApplicationStatus(app, ProtectionStatus.Error, result.message);
+                // Check if this is a file not found error
+                if (result.isNotFound) {
+                    this.updateApplicationStatus(app, ProtectionStatus.NotFound, result.message);
+                } else {
+                    this.updateApplicationStatus(app, ProtectionStatus.Error, result.message);
+                }
             }
 
             return result;
@@ -816,7 +821,12 @@ export class ConfigurationsService extends BaseService {
                 this.updateApplicationStatus(app, ProtectionStatus.Loading, "Unprotected configuration restored");
             }
         } else {
-            this.updateApplicationStatus(app, ProtectionStatus.Error, result.message);
+            // Check if this is a file not found error
+            if (result.isNotFound) {
+                this.updateApplicationStatus(app, ProtectionStatus.NotFound, result.message);
+            } else {
+                this.updateApplicationStatus(app, ProtectionStatus.Error, result.message);
+            }
         }
 
         return result;
@@ -825,7 +835,7 @@ export class ConfigurationsService extends BaseService {
     /**
      * Start monitoring configuration file for an application
      */
-    startWatchingConfig(appName: string): boolean {
+    async startWatchingConfig(appName: string): Promise<boolean> {
         const app = this.applications.get(appName);
         const config = this.configurations.get(appName);
 
@@ -843,6 +853,18 @@ export class ConfigurationsService extends BaseService {
 
             // Process config initially
             this.processConfig(appName);
+
+            // Check if configuration file exists before trying to watch it
+            try {
+                await fs.promises.stat(app.configurationPath);
+            } catch (error: any) {
+                if (error.code === 'ENOENT') {
+                    this.logger.info(`Configuration file does not exist yet: ${app.configurationPath}. Will watch parent directory.`);
+                    // We'll still set up watching for the parent directory in case the file gets created
+                } else {
+                    throw error; // Re-throw non-ENOENT errors
+                }
+            }
 
             // Keep track of last modified timestamp to handle duplicate events
             let lastModified = Date.now();
@@ -955,7 +977,9 @@ export class ConfigurationsService extends BaseService {
 
         // Start watching all files
         for (const app of this.applications.values()) {
-            this.startWatchingConfig(app.name);
+            this.startWatchingConfig(app.name).catch(error => {
+                this.logger.error(`Failed to start watching config for ${app.name}:`, error);
+            });
         }
 
         // Make sure queued notifications are processed
