@@ -108,7 +108,16 @@ export abstract class BaseMCPConfiguration {
         try {
             const content = await fs.readFile(filePath, 'utf-8');
             return JSON.parse(content);
-        } catch (error) {
+        } catch (error: any) {
+            // Check if the error is specifically because the file doesn't exist
+            if (error.code === 'ENOENT') {
+                // Create a custom error type for file not found
+                const notFoundError = new Error(`Configuration file not found: ${filePath}`);
+                (notFoundError as any).code = 'CONFIG_NOT_FOUND';
+                (notFoundError as any).originalError = error;
+                throw notFoundError;
+            }
+            // For other errors, throw a generic error
             throw new Error(`Failed to read config from ${filePath}: ${error.message}`);
         }
     }
@@ -298,7 +307,8 @@ export abstract class BaseMCPConfiguration {
     async restoreUnprotectedConfig(): Promise<{
         success: boolean,
         message: string,
-        servers?: ProtectedServerConfig[]
+        servers?: ProtectedServerConfig[],
+        isNotFound?: boolean
     }> {
         try {
             const configPath = this.getConfigPath();
@@ -309,8 +319,15 @@ export abstract class BaseMCPConfiguration {
             // Check if the original config path exists
             try {
                 await fs.stat(configPath);
-            } catch (error) {
+            } catch (error: any) {
                 logger.error(`Original config path does not exist: ${configPath}`, error);
+                if (error.code === 'ENOENT') {
+                    return {
+                        success: false,
+                        message: `Configuration file not found - application may not be installed`,
+                        isNotFound: true
+                    };
+                }
                 return {
                     success: false,
                     message: `Original configuration file does not exist: ${configPath}`
@@ -399,7 +416,8 @@ export abstract class BaseMCPConfiguration {
     async processConfigFile(appName?: string, enableSSEProxying: boolean = true): Promise<{
         success: boolean,
         message: string,
-        servers?: ProtectedServerConfig[]
+        servers?: ProtectedServerConfig[],
+        isNotFound?: boolean
     }> {
         try {
             const configPath = this.getConfigPath();
@@ -480,7 +498,17 @@ export abstract class BaseMCPConfiguration {
                 message,
                 servers: updatedServers
             };
-        } catch (error) {
+        } catch (error: any) {
+            // Check if this is a file not found error
+            if (error.code === 'CONFIG_NOT_FOUND') {
+                logger.info(`Configuration file not found: ${error.message}`);
+                return {
+                    success: false,
+                    message: 'Configuration file not found - application may not be installed',
+                    isNotFound: true
+                };
+            }
+
             logger.error(`Error processing config: ${error.message}`, error);
             return {
                 success: false,
