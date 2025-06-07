@@ -377,6 +377,7 @@ ${type === 'tool_call' ? `<category>${sig.category || 'Unknown'}</category>` : '
         ${formattedContent}
         \n
         ${endInput}
+    `;
 }
 
 /**
