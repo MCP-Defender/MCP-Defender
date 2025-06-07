@@ -38,6 +38,10 @@ export async function handleVerifyRequest(
         // Extract args from the message - note that in MCP, the arguments are directly under params
         const args = message.params?.arguments || {};
 
+        // Extract user_intent from args and remove it from the args passed to the tool
+        const userIntent = args.user_intent || '';
+        const { user_intent, ...toolArgs } = args; // Remove user_intent from tool args
+
         // Server info for scan result
         const serverInfo = {
             serverName: data.serverInfo?.name || 'unknown',
@@ -46,9 +50,10 @@ export async function handleVerifyRequest(
         };
 
         console.debug(`Server info: ${JSON.stringify(serverInfo)}`);
+        console.debug(`User intent: ${userIntent}`);
 
-        // Verify the tool call
-        const verification = await verifyToolCall(toolName, args, serverInfo);
+        // Verify the tool call with user intent
+        const verification = await verifyToolCall(toolName, toolArgs, serverInfo, userIntent);
 
         // Response with verification result
         res.setHeader('Content-Type', 'application/json');

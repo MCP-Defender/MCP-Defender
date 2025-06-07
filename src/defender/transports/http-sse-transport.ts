@@ -719,7 +719,8 @@ export async function handleMessageEndpoint(
                     const verificationResult = await verifyToolCall(
                         toolName,
                         toolArgs,
-                        serverInfo
+                        serverInfo,
+                        '' // SSE transport doesn't have user intent - only STDIO proxy adds this
                     );
 
                     if (!verificationResult.allowed) {

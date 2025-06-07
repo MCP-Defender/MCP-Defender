@@ -59,6 +59,7 @@ interface VerificationRequest {
     type: VerificationType;
     toolName: string;
     content: any;
+    userIntent?: string;
 }
 
 /**
@@ -287,10 +288,12 @@ function determineVerificationMethod(): {
 /**
  * Generate instructions for the verification based on type
  */
-function generateVerificationInstructions(type: VerificationType): string {
+function generateVerificationInstructions(type: VerificationType, userIntent?: string): string {
+    const userIntentSection = userIntent ? `\n\n# User Intent\nThe user has provided the following context for this tool call:\n"${userIntent}"\n\nConsider this intent when evaluating the security implications of the tool call. The user's stated intent should be factored into your security assessment.` : '';
+
     if (type === 'tool_call') {
         return `# Identity
-You are a security validator for MCP tool calls that analyzes whether a tool call should be allowed or blocked based on security signatures.
+You are a security validator for MCP tool calls that analyzes whether a tool call should be allowed or blocked based on security signatures.${userIntentSection}
 
 # Instructions
 1. Evaluate the given tool call against EACH of the provided verification signatures.
@@ -303,7 +306,8 @@ ALLOWED: [true/false]
 REASON: [short explanation of why the call is allowed or blocked]
 
 5. Make your judgments strictly based on security concerns, not general helpfulness.
-6. Be specific about which aspects of the tool call triggered your decision.`;
+6. Be specific about which aspects of the tool call triggered your decision.
+7. Consider the user's stated intent when evaluating the legitimacy and security of the tool call.`;
     } else {
         return `# Identity
 You are a security validator for MCP tool responses that analyzes whether a tool response should be allowed or blocked based on security signatures.
@@ -328,7 +332,7 @@ REASON: [short explanation of why the response is allowed or blocked]`;
 /**
  * Generate verification input based on type and content
  */
-function generateVerificationInput(type: VerificationType, toolName: string, formattedContent: string): string {
+function generateVerificationInput(type: VerificationType, toolName: string, formattedContent: string, userIntent?: string): string {
     // Filter out disabled signatures
     const enabledSignatures = state.signatures.filter(sig =>
         !state.settings.disabledSignatures || !state.settings.disabledSignatures.has(sig.id)
@@ -352,10 +356,11 @@ ${type === 'tool_call' ? `<category>${sig.category || 'Unknown'}</category>` : '
     // Generate the appropriate input based on type
     const typeLabel = type === 'tool_call' ? 'Tool Call Details' : 'Tool Response Details';
     const contentLabel = type === 'tool_call' ? 'Tool arguments' : 'Tool response';
+    const userIntentSection = userIntent && type === 'tool_call' ? `\nUser intent: ${userIntent}` : '';
 
     return `# ${typeLabel}
 Tool name: ${toolName}
-${contentLabel}: ${formattedContent}
+${contentLabel}: ${formattedContent}${userIntentSection}
 
 # Verification Signatures
 ${formattedSignatures}`;
@@ -392,7 +397,7 @@ function createDefaultVerificationResult(
  * Core verification function that can handle both tool calls and responses
  */
 async function verifyContent(request: VerificationRequest): Promise<VerificationResult> {
-    const { type, toolName, content } = request;
+    const { type, toolName, content, userIntent } = request;
 
     console.log(`Verifying ${type === 'tool_call' ? 'tool call' : 'tool response'}: ${toolName}`);
 
@@ -426,8 +431,8 @@ async function verifyContent(request: VerificationRequest): Promise<Verification
 
     try {
         // Generate appropriate instructions and input
-        const instructions = generateVerificationInstructions(type);
-        const input = generateVerificationInput(type, toolName, formattedContent);
+        const instructions = generateVerificationInstructions(type, userIntent);
+        const input = generateVerificationInput(type, toolName, formattedContent, userIntent);
 
         // Make the verification request
         const output = await makeVerificationRequest(instructions, input);
@@ -629,7 +634,8 @@ export async function verifyToolCall(
         serverName: string;
         serverVersion?: string;
         appName?: string;
-    }
+    },
+    userIntent?: string
 ): Promise<{
     allowed: boolean,
     verificationMap: SignatureVerificationMap
@@ -674,7 +680,8 @@ export async function verifyToolCall(
             verification = await verifyContent({
                 type: 'tool_call',
                 toolName,
-                content: args
+                content: args,
+                userIntent
             });
         } else {
             // Skip verification but create a record indicating it was skipped

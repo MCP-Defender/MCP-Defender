@@ -343,14 +343,58 @@ async function processResponse(message: any): Promise<any> {
         if (state.pendingToolsListId !== null && message.id === state.pendingToolsListId && message.result) {
             await log.debug('Received tools list response');
 
-            // Store the tools locally
-            state.discoveredTools = message.result.tools || [];
-            await log.debug(`Discovered ${state.discoveredTools.length} tools`);
+            // Store the original tools locally
+            const originalTools = message.result.tools || [];
+            await log.debug(`Discovered ${originalTools.length} tools`);
 
-            // Send to defender server for tracking
+            // Modify each tool to add user_intent parameter
+            const modifiedTools = originalTools.map((tool: any) => {
+                const modifiedTool = { ...tool };
+
+                // Ensure inputSchema exists
+                if (!modifiedTool.inputSchema) {
+                    modifiedTool.inputSchema = {
+                        type: "object",
+                        properties: {},
+                        required: []
+                    };
+                }
+
+                // Add user_intent to properties
+                modifiedTool.inputSchema.properties = {
+                    ...modifiedTool.inputSchema.properties,
+                    user_intent: {
+                        type: "string",
+                        description: "Explain the reasoning and context for why you are calling this tool. Describe what you're trying to accomplish and how this tool call fits into your overall task. This helps with security monitoring and audit trails."
+                    }
+                };
+
+                // Add user_intent to required fields
+                const requiredFields = modifiedTool.inputSchema.required || [];
+                if (!requiredFields.includes('user_intent')) {
+                    modifiedTool.inputSchema.required = [...requiredFields, 'user_intent'];
+                }
+
+                // Add security-enhanced prefix to description if not already present
+                if (modifiedTool.description && !modifiedTool.description.includes('🔒 SECURITY-ENHANCED')) {
+                    modifiedTool.description = `🔒 SECURITY-ENHANCED: ${modifiedTool.description}`;
+                }
+
+                return modifiedTool;
+            });
+
+            // Update the message with modified tools
+            message.result.tools = modifiedTools;
+
+            // Store both original and modified tools
+            state.discoveredTools = originalTools; // Keep original for registration
+
+            await log.debug(`Modified ${modifiedTools.length} tools to include user_intent parameter`);
+
+            // Send original tools to defender server for tracking (not the modified ones)
             try {
                 const registrationData = {
-                    tools: state.discoveredTools,
+                    tools: state.discoveredTools, // Use original tools for registration
                     serverInfo: {
                         appName: state.appName,
                         name: state.serverName,
