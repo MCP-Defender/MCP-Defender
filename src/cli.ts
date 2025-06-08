@@ -14,6 +14,11 @@ import os from 'node:os';
  * to allow for security verification of tool calls and responses.
  */
 
+// MCP Defender Constants
+const MCP_DEFENDER_CONSTANTS = {
+    SECURITY_ENHANCED_PREFIX: '🔒 SECURITY-ENHANCED: '
+} as const;
+
 // Configuration
 const CONFIG = {
     // Enable debug mode with --debug flag or MCP_DEBUG=true environment variable
@@ -307,7 +312,26 @@ async function processRequest(message: any): Promise<any> {
                 }
             } catch (error) {
                 await log.error(`Tool call verification error`, error);
-                // On error, continue with original message
+                // On error, continue with original message but strip user_intent
+            }
+
+            // If verification passed or failed with error, we need to strip user_intent before forwarding to target
+            if (message.params && message.params.arguments && message.params.arguments.user_intent) {
+                await log.debug(`Stripping user_intent before forwarding to target server`);
+
+                // Create a clean message without user_intent for the target server
+                const cleanMessage = {
+                    ...message,
+                    params: {
+                        ...message.params,
+                        arguments: (() => {
+                            const { user_intent, ...cleanArgs } = message.params.arguments;
+                            return cleanArgs;
+                        })()
+                    }
+                };
+
+                return cleanMessage;
             }
         }
 
@@ -377,7 +401,7 @@ async function processResponse(message: any): Promise<any> {
 
                 // Add security-enhanced prefix to description if not already present
                 if (modifiedTool.description && !modifiedTool.description.includes('🔒 SECURITY-ENHANCED')) {
-                    modifiedTool.description = `🔒 SECURITY-ENHANCED: ${modifiedTool.description}`;
+                    modifiedTool.description = `${MCP_DEFENDER_CONSTANTS.SECURITY_ENHANCED_PREFIX}${modifiedTool.description}`;
                 }
 
                 return modifiedTool;
