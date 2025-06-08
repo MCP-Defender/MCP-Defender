@@ -1,3 +1,8 @@
+import { createLogger } from './logger';
+
+// Create logger for cursor rules
+const logger = createLogger('CursorRules');
+
 // Cursor API Types
 export interface CursorRule {
     id: string;
@@ -275,13 +280,12 @@ export class CursorAPI {
         };
     }
 
-    // Add a knowledge base entry
-    async addKnowledgeBase(url: string): Promise<boolean> {
+    // Delete a rule by ID
+    async deleteRule(ruleId: string): Promise<boolean> {
         const encoder = new ProtobufEncoder();
-        encoder.encodeInt(1, 100); // Field 1: number
-        encoder.encodeString(2, url); // Field 2: URL
+        encoder.encodeString(1, ruleId); // Field 1: rule ID
 
-        const response = await fetch(`${this.baseUrl}/aiserver.v1.AiService/KnowledgeBaseList`, {
+        const response = await fetch(`${this.baseUrl}/aiserver.v1.AiService/KnowledgeBaseRemove`, {
             method: 'POST',
             headers: this.getHeaders(),
             body: encoder.toBytes()
@@ -305,10 +309,12 @@ export function createCursorAPI(bearerToken: string): CursorAPI {
     return new CursorAPI(config);
 }
 
-// MCP Defender specific utilities
-export const MCP_DEFENDER_RULE_TEXT = 'ALWAYS use MCP defender secure tools when available. For EVERY tool call, you MUST include a "mcp_defender_user_intent" argument containing the user\'s request context and conversation history.';
+// Constants
+export const MCP_DEFENDER_RULE_TEXT = 'Always use MCP tools over built in tools. Each MCP tool includes a user_intent argument. Always provide a reason why we choose that specific tool, the thought behind choosing the tool, while including the original intent and prompt of the user.';
 
-// Extract Cursor auth token from SQLite database using native sqlite3 command
+/**
+ * Extract Cursor auth token from SQLite database using native sqlite3 command
+ */
 export async function extractCursorAuthToken(): Promise<string | null> {
     try {
         const os = await import('os');
@@ -324,7 +330,7 @@ export async function extractCursorAuthToken(): Promise<string | null> {
 
         // Check if file exists
         if (!fs.existsSync(cursorDbPath)) {
-            console.warn('Cursor database not found at:', cursorDbPath);
+            logger.warn(`Cursor database not found at: ${cursorDbPath}`);
             return null;
         }
 
@@ -335,32 +341,36 @@ export async function extractCursorAuthToken(): Promise<string | null> {
         const result = execSync(command, { encoding: 'utf-8' }).trim();
 
         if (!result) {
-            console.warn('No auth token found in database');
+            logger.warn('No auth token found in database');
             return null;
         }
 
         // Validate this looks like a JWT token
         if (result.startsWith('eyJ') && result.split('.').length === 3) {
-            console.log('Successfully extracted Cursor auth token');
+            logger.debug('Successfully extracted Cursor auth token');
             return result;
         }
 
-        console.warn('Value found but not a valid JWT token');
+        logger.warn('Value found but not a valid JWT token');
         return null;
 
     } catch (error) {
-        console.error('Failed to extract Cursor auth token:', error);
+        logger.error('Failed to extract Cursor auth token', error);
         return null;
     }
 }
 
-// Ensure MCP Defender rule exists
-export async function ensureMCPDefenderRule(): Promise<boolean> {
+/**
+ * Main method to protect Cursor by adding MCP Defender rule
+ */
+export async function protectCursor(): Promise<boolean> {
+    logger.info('Starting Cursor protection - adding MCP Defender rule');
+
     try {
         // Extract auth token
         const authToken = await extractCursorAuthToken();
         if (!authToken) {
-            console.error('Could not extract Cursor auth token');
+            logger.error('Could not extract Cursor auth token');
             return false;
         }
 
@@ -368,75 +378,137 @@ export async function ensureMCPDefenderRule(): Promise<boolean> {
         const api = createCursorAPI(authToken);
 
         // List existing rules
-        console.log('Checking existing Cursor rules...');
+        logger.debug('Fetching existing Cursor rules');
         const response = await api.listRules();
+        logger.debug(`Found ${response.rules.length} existing rules`);
 
-        // Check if any MCP Defender rule already exists (old or new version)
+        // Check if MCP Defender rule already exists
         const existingRule = response.rules.find(rule =>
             rule.text.trim().toLowerCase().includes('mcp defender') ||
             rule.text.trim().toLowerCase().includes('mcp_defender_user_intent')
         );
 
         if (existingRule) {
-            console.log('Found existing MCP Defender rule:', existingRule.id);
-
             // Check if it's the exact text we want
             if (existingRule.text.trim() === MCP_DEFENDER_RULE_TEXT) {
-                console.log('MCP Defender rule is already up to date');
+                logger.info('MCP Defender rule already exists and is up to date');
                 return true;
             }
 
             // Update the existing rule with new text
-            console.log('Updating existing MCP Defender rule...');
+            logger.info(`Updating existing MCP Defender rule (ID: ${existingRule.id})`);
             const updateSuccess = await api.updateRule(MCP_DEFENDER_RULE_TEXT, existingRule.filename);
 
             if (updateSuccess) {
-                console.log('Successfully updated MCP Defender rule');
+                logger.info('Successfully updated MCP Defender rule');
                 return true;
             } else {
-                console.error('Failed to update existing MCP Defender rule');
+                logger.error('Failed to update existing MCP Defender rule');
                 return false;
             }
         }
 
         // No existing rule, add a new one
-        console.log('Adding new MCP Defender rule...');
+        logger.info('Adding new MCP Defender rule');
         const addResult = await api.addRule(MCP_DEFENDER_RULE_TEXT);
 
         if (addResult.status === 1) {
-            console.log('Successfully added MCP Defender rule with ID:', addResult.ruleId);
+            logger.info(`Successfully added MCP Defender rule with ID: ${addResult.ruleId}`);
 
             // Verify it was added by listing rules again
+            logger.debug('Verifying rule was added successfully');
             const verifyResponse = await api.listRules();
             const newRule = verifyResponse.rules.find(rule => rule.id === addResult.ruleId);
 
             if (newRule) {
-                console.log('Verified MCP Defender rule was added successfully');
+                logger.info('Verified MCP Defender rule was added successfully');
                 return true;
             } else {
-                console.warn('Rule was added but not found in verification check');
+                logger.warn('Rule was added but not found in verification check');
                 return false;
             }
         } else {
-            console.error('Failed to add MCP Defender rule, status:', addResult.status);
+            logger.error(`Failed to add MCP Defender rule, API returned status: ${addResult.status}`);
             return false;
         }
 
     } catch (error) {
-        console.error('Error ensuring MCP Defender rule:', error);
+        logger.error('Error protecting Cursor with MCP Defender rule', error);
         return false;
     }
 }
 
-// Initialize MCP Defender integration (call this when app starts)
-export async function initializeMCPDefenderIntegration(): Promise<void> {
-    console.log('Initializing MCP Defender Cursor integration...');
+/**
+ * Main method to unprotect Cursor by removing MCP Defender rule
+ */
+export async function unprotectCursor(): Promise<boolean> {
+    logger.info('Starting Cursor unprotection - removing MCP Defender rule');
 
-    const success = await ensureMCPDefenderRule();
+    try {
+        // Extract auth token
+        const authToken = await extractCursorAuthToken();
+        if (!authToken) {
+            logger.error('Could not extract Cursor auth token');
+            return false;
+        }
 
-    if (success) {
-        console.log('✅ MCP Defender Cursor integration initialized successfully');
-    } else {
-        console.log('❌ Failed to initialize MCP Defender Cursor integration');
+        // Create API client
+        const api = createCursorAPI(authToken);
+
+        // List existing rules
+        logger.debug('Fetching existing Cursor rules');
+        const response = await api.listRules();
+        logger.debug(`Found ${response.rules.length} existing rules`);
+
+        // Find all MCP Defender related rules
+        const mcpDefenderRules = response.rules.filter(rule =>
+            rule.text.trim().toLowerCase().includes('mcp defender') ||
+            rule.text.trim().toLowerCase().includes('mcp_defender_user_intent')
+        );
+
+        if (mcpDefenderRules.length === 0) {
+            logger.info('No MCP Defender rules found - already unprotected');
+            return true;
+        }
+
+        logger.info(`Found ${mcpDefenderRules.length} MCP Defender rule(s) to remove`);
+
+        // Delete all MCP Defender rules
+        let allDeleted = true;
+        for (const rule of mcpDefenderRules) {
+            try {
+                logger.debug(`Deleting MCP Defender rule (ID: ${rule.id})`);
+                const deleted = await api.deleteRule(rule.id);
+                if (deleted) {
+                    logger.debug(`Successfully deleted rule: ${rule.id}`);
+                } else {
+                    logger.warn(`Failed to delete rule: ${rule.id}`);
+                    allDeleted = false;
+                }
+            } catch (error) {
+                logger.error(`Error deleting rule ${rule.id}`, error);
+                allDeleted = false;
+            }
+        }
+
+        // Verify rules were deleted by listing again
+        logger.debug('Verifying rules were deleted successfully');
+        const verifyResponse = await api.listRules();
+        const remainingMcpRules = verifyResponse.rules.filter(rule =>
+            rule.text.trim().toLowerCase().includes('mcp defender') ||
+            rule.text.trim().toLowerCase().includes('mcp_defender_user_intent')
+        );
+
+        if (remainingMcpRules.length === 0) {
+            logger.info('Successfully verified all MCP Defender rules were removed');
+            return true;
+        } else {
+            logger.warn(`${remainingMcpRules.length} MCP Defender rule(s) still remain after deletion attempt`);
+            return false;
+        }
+
+    } catch (error) {
+        logger.error('Error unprotecting Cursor from MCP Defender rule', error);
+        return false;
     }
 }

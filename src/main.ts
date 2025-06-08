@@ -20,7 +20,6 @@ import { DefenderStatus } from './services/defender/types';
 import { create } from 'node:domain';
 import { ScanResult, SignatureVerification } from './services/scans/types';
 import { v4 as uuidv4 } from 'uuid';
-import { initializeMCPDefenderIntegration } from './utils/cursor-rules';
 
 // Create a global logger for the main process
 const logger = createLogger('Main');
@@ -212,9 +211,6 @@ function processDeepLink(url: string) {
 async function startupApp() {
   // Copy CLI to tmp directory first
   await copyCLIToTmpDirectory();
-
-  // Initialize MCP Defender Cursor integration
-  // await initializeMCPDefenderIntegration();
 
   // Need to start settings service first as it has onboarding info
   const serviceManager = ServiceManager.getInstance();
