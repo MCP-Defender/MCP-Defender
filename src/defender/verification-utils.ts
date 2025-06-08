@@ -226,13 +226,11 @@ async function makeVerificationRequest(
             const result = await makeBackendVerificationRequest(fullPrompt);
             return result.response;
         } catch (error) {
-            console.error('Backend verification failed, falling back to OpenAI client:', error);
-            // If backend fails, we'll attempt to fall back to OpenAI client if available
+            throw new Error('Verification failed with error: ' + error);
         }
-    }
-
-    // Otherwise use OpenAI client directly (or as fallback if backend fails)
-    if (!openaiClient) {
+    } else if (!loginToken && llmSettings.provider === 'mcp-defender') {
+        throw new Error('Error: Login to MCP Defender in settings ');
+    } else if (llmSettings.provider === 'OpenAI' && !openaiClient) {
         throw new Error('OpenAI client not initialized and backend verification failed');
     }
 
