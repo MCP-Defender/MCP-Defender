@@ -10,6 +10,9 @@ export enum LogLevel {
     ERROR = 3
 }
 
+// Log configuration constants
+const MAX_LOG_MESSAGE_LENGTH = 250;
+
 // Log file path
 const LOG_DIR = path.join(app.getPath('userData'), 'logs');
 const LOG_FILE = path.join(LOG_DIR, `mcp-defender-${new Date().toISOString().split('T')[0]}.log`);
@@ -114,6 +117,11 @@ export class Logger {
                 } catch (e) {
                     fullMessage += ' [Error serializing arguments]';
                 }
+            }
+
+            // Truncate message if it exceeds the maximum length
+            if (fullMessage.length > MAX_LOG_MESSAGE_LENGTH) {
+                fullMessage = fullMessage.substring(0, MAX_LOG_MESSAGE_LENGTH - 15) + '... (truncated)';
             }
 
             // Add newline and write to file
