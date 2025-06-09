@@ -46,6 +46,17 @@ export enum MCPDefenderEnvVar {
 }
 
 /**
+ * Constants for MCP Defender branding and display
+ */
+export const MCP_DEFENDER_CONSTANTS = {
+    /** Text appended to server names to indicate they are protected */
+    PROTECTION_INDICATOR: '- 🔒 MCP Defender',
+
+    /** Prefix added to tool descriptions to indicate security enhancement */
+    SECURITY_ENHANCED_PREFIX: '🔒 SECURITY-ENHANCED: '
+} as const;
+
+/**
  * Status change callback function type
  */
 export type StatusChangeCallback = (appName: string, app: MCPApplication) => void;
@@ -55,8 +66,11 @@ export type StatusChangeCallback = (appName: string, app: MCPApplication) => voi
  */
 export interface ServerTool {
     name: string;
-    description?: string;
+    description?: string | null;
+    /** Tool parameters schema (may be called inputSchema in some contexts) */
     parameters?: any;
+    /** Alternative name for parameters in some MCP implementations */
+    inputSchema?: any;
     [key: string]: any;
 }
 

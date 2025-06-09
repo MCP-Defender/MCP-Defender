@@ -38,6 +38,10 @@ export async function handleVerifyRequest(
         // Extract args from the message - note that in MCP, the arguments are directly under params
         const args = message.params?.arguments || {};
 
+        // Extract user_intent from args and remove it from the args passed to the tool
+        const userIntent = args.user_intent || '';
+        const { user_intent, ...toolArgs } = args; // Remove user_intent from tool args
+
         // Server info for scan result
         const serverInfo = {
             serverName: data.serverInfo?.name || 'unknown',
@@ -46,9 +50,10 @@ export async function handleVerifyRequest(
         };
 
         console.debug(`Server info: ${JSON.stringify(serverInfo)}`);
+        console.debug(`User intent: ${userIntent}`);
 
-        // Verify the tool call
-        const verification = await verifyToolCall(toolName, args, serverInfo);
+        // Verify the tool call with user intent
+        const verification = await verifyToolCall(toolName, toolArgs, serverInfo, userIntent);
 
         // Response with verification result
         res.setHeader('Content-Type', 'application/json');
@@ -154,37 +159,82 @@ export async function handleRegisterTools(
         const effectiveAppName = appName || 'unknown';
         const key = `${effectiveAppName}:${effectiveServerName}`;
 
+        // Log detailed tool information including descriptions
+        console.log(`Registering ${tools.length} tools for ${key}:`);
+        tools.forEach((tool, index) => {
+            const description = tool.description ? ` - ${tool.description}` : ' (no description)';
+            const parameters = tool.parameters || tool.inputSchema;
+            const paramCount = parameters?.properties ? Object.keys(parameters.properties).length : 0;
+
+            console.log(`  ${index + 1}. ${tool.name}${description} (${paramCount} parameters)`);
+        });
+
         // Initialize serverTools if needed
         if (!state.serverTools) {
             state.serverTools = new Map();
         }
 
-        // Store tools in the state
+        // Process tools to ensure they have proper structure for storage
+        const processedTools = tools.map(tool => ({
+            name: tool.name,
+            description: tool.description || null,
+            parameters: tool.parameters || tool.inputSchema || null,
+            // Keep any additional properties
+            ...tool
+        }));
+
+        // Store tools in the state with enhanced information
         state.serverTools.set(key, {
-            tools,
-            serverInfo: serverInfo || { name: effectiveServerName },
+            tools: processedTools,
+            serverInfo: {
+                name: effectiveServerName,
+                version: serverInfo?.version || 'unknown',
+                appName: effectiveAppName,
+                ...serverInfo
+            },
             lastUpdated: new Date()
         });
 
-        console.log(`Registered ${tools.length} tools for ${key}`);
+        console.log(`Successfully registered ${tools.length} tools for ${key}`);
 
-        // Notify main process about the new tools
+        // Count tools with and without descriptions for logging
+        const toolsWithDescriptions = processedTools.filter(tool => tool.description);
+        const toolsWithoutDescriptions = processedTools.filter(tool => !tool.description);
+
+        if (toolsWithDescriptions.length > 0) {
+            console.log(`  ${toolsWithDescriptions.length} tools have descriptions`);
+        }
+        if (toolsWithoutDescriptions.length > 0) {
+            console.log(`  ${toolsWithoutDescriptions.length} tools missing descriptions`);
+        }
+
+        // Notify main process about the new tools with enhanced data
         sendMessageToParent({
             type: DefenderServerEvent.TOOLS_UPDATE,
             data: {
                 appName: effectiveAppName,
                 serverName: effectiveServerName,
-                tools,
-                timestamp: new Date().toISOString()
+                tools: processedTools,
+                timestamp: new Date().toISOString(),
+                stats: {
+                    total: processedTools.length,
+                    withDescriptions: toolsWithDescriptions.length,
+                    withoutDescriptions: toolsWithoutDescriptions.length
+                }
             }
         });
 
-        // Return success
+        // Return success with detailed information
         res.statusCode = 200;
         res.setHeader('Content-Type', 'application/json');
         res.end(JSON.stringify({
             success: true,
-            message: `Registered ${tools.length} tools for ${effectiveAppName}:${effectiveServerName}`
+            message: `Registered ${tools.length} tools for ${effectiveAppName}:${effectiveServerName}`,
+            stats: {
+                total: processedTools.length,
+                withDescriptions: toolsWithDescriptions.length,
+                withoutDescriptions: toolsWithoutDescriptions.length
+            }
         }));
     } catch (error) {
         console.error('Error registering tools:', error);

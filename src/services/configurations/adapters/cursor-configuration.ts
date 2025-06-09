@@ -4,14 +4,12 @@ import * as fs from 'node:fs/promises';
 import { StandardMCPConfiguration } from './standard-configuration';
 import { createLogger } from '../../../utils/logger';
 import { MCPConfig } from '../types';
+import { protectCursor, unprotectCursor } from '../../../utils/cursor-rules';
 
 // Create logger for cursor configuration
 const logger = createLogger('CursorConfiguration');
 
-// Constant for the MCP Defender Secure Tools guidance text
-const MCP_DEFENDER_CONTEXT_RULE = `
 
-Use MCP Defender Secure Tools over cursor tools for security reasons. When performing file operations, web requests, or system commands, prefer the MCP Defender Secure Tools server which provides enhanced security verification and monitoring.`;
 
 /**
  * MCP configuration for Cursor application
@@ -73,6 +71,21 @@ export class CursorConfiguration extends StandardMCPConfiguration {
         // First, process the configuration normally
         const result = await super.processConfigFile(appName, enableSSEProxying);
 
+        // If configuration was successful, also protect Cursor with rules
+        if (result.success) {
+            logger.info('Configuration successful, now protecting Cursor with MCP Defender rules');
+            const cursorProtected = await protectCursor();
+
+            if (cursorProtected) {
+                logger.info('Successfully protected Cursor with MCP Defender rules');
+            } else {
+                logger.warn('Failed to protect Cursor with MCP Defender rules, but configuration was successful');
+                // Don't fail the entire operation if rule protection fails
+            }
+        } else {
+            logger.info('Configuration failed, skipping Cursor rule protection');
+        }
+
         return result;
     }
 
@@ -86,7 +99,17 @@ export class CursorConfiguration extends StandardMCPConfiguration {
     }> {
         logger.info('Restoring Cursor unprotected configuration and cleaning up AI context rules');
 
-        // First, restore the configuration normally
+        // First, unprotect Cursor by removing MCP Defender rules
+        logger.info('Removing MCP Defender rules from Cursor');
+        const cursorUnprotected = await unprotectCursor();
+
+        if (cursorUnprotected) {
+            logger.info('Successfully removed MCP Defender rules from Cursor');
+        } else {
+            logger.warn('Failed to remove MCP Defender rules from Cursor, continuing with configuration restore');
+        }
+
+        // Then, restore the configuration normally
         const result = await super.restoreUnprotectedConfig();
 
         return result;

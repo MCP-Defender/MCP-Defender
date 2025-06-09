@@ -1,4 +1,4 @@
-import { ServerConfig, MCPConfig, ProtectedServerConfig, MCPDefenderEnvVar } from './types';
+import { ServerConfig, MCPConfig, ProtectedServerConfig, MCPDefenderEnvVar, MCP_DEFENDER_CONSTANTS } from './types';
 import * as path from 'path';
 import * as fs from 'node:fs/promises';
 import { createLogger } from '../../utils/logger';
@@ -189,38 +189,54 @@ export abstract class BaseMCPConfiguration {
         }
 
         // Check each server
-        for (const [serverName, server] of Object.entries(config.mcpServers)) {
+        for (const [configKey, server] of Object.entries(config.mcpServers)) {
             let isProtected = false;
 
-            if ('url' in server) {
-                // SSE server
-                try {
-                    const url = new URL(server.url);
-                    if (
-                        url.hostname === 'localhost' &&
-                        url.port === this.proxyPort.toString() &&
-                        server.env?.[MCPDefenderEnvVar.OriginalUrl]
-                    ) {
-                        isProtected = true;
-                    }
-                } catch (error) {
-                    // Invalid URL, not protected
-                }
-            } else if ('command' in server) {
-                // STDIO server
-                const command = server.command;
-                const args = server.args;
+            // Determine the actual server name (removing protection indicator if present)
+            let actualServerName = configKey;
 
-                // Check if using our CLI proxy
-                isProtected =
-                    command === 'node' &&
-                    args.length > 0 &&
-                    args[0].includes('cli.js') &&
-                    args[0].includes(this.cliPath);
+            // If this server is protected, get the original server name from env variable
+            if (server.env?.[MCPDefenderEnvVar.ServerName]) {
+                actualServerName = server.env[MCPDefenderEnvVar.ServerName];
+                isProtected = true;
+            } else {
+                // Check if this is a protected server by looking at configuration
+                if ('url' in server) {
+                    // SSE server
+                    try {
+                        const url = new URL(server.url);
+                        if (
+                            url.hostname === 'localhost' &&
+                            url.port === this.proxyPort.toString() &&
+                            server.env?.[MCPDefenderEnvVar.OriginalUrl]
+                        ) {
+                            isProtected = true;
+                        }
+                    } catch (error) {
+                        // Invalid URL, not protected
+                    }
+                } else if ('command' in server) {
+                    // STDIO server
+                    const command = server.command;
+                    const args = server.args;
+
+                    // Check if using our CLI proxy
+                    isProtected =
+                        command === 'node' &&
+                        args.length > 0 &&
+                        args[0].includes('cli.js') &&
+                        args[0].includes(this.cliPath);
+                }
+
+                // If not already determined to be protected, but has protection indicator in name,
+                // extract the original name
+                if (!isProtected && configKey.includes(MCP_DEFENDER_CONSTANTS.PROTECTION_INDICATOR)) {
+                    actualServerName = configKey.replace(MCP_DEFENDER_CONSTANTS.PROTECTION_INDICATOR, '');
+                }
             }
 
             result.push({
-                serverName,
+                serverName: actualServerName, // Use the actual server name for routing
                 config: server,
                 isProtected,
                 tools: [] // Initialize with empty array of tools
@@ -246,8 +262,19 @@ export abstract class BaseMCPConfiguration {
         const effectiveAppName = appName || path.basename(this.getConfigPath(), '.json');
         logger.debug(`Protecting ${serverCount} servers for app: ${effectiveAppName}, SSE proxying: ${enableSSEProxying}`);
 
+        // We need to track renamed servers to update the object after iteration
+        const renamedServers: Array<{ oldKey: string, newKey: string, server: any }> = [];
+
         // Process each server configuration
         for (const [key, server] of Object.entries(proxiedConfig.mcpServers)) {
+            // Determine the new server name with protection indicator
+            const newKey = key.includes('🔒') ? key : `${key}${MCP_DEFENDER_CONSTANTS.PROTECTION_INDICATOR}`;
+
+            // Track if we need to rename this server
+            if (newKey !== key) {
+                renamedServers.push({ oldKey: key, newKey, server });
+            }
+
             // Handle SSE servers
             if ('url' in server) {
                 if (enableSSEProxying) {
@@ -256,14 +283,15 @@ export abstract class BaseMCPConfiguration {
                     logger.debug(`Protecting SSE server: ${key}, original URL: ${originalUrl}`);
 
                     // Update to use our proxy endpoint - include app name in path
+                    // Use original key (not new key) for the URL path to maintain consistency
                     server.url = `http://localhost:${this.proxyPort}/${effectiveAppName}/${key}/sse`;
 
-                    // Add metadata
+                    // Add metadata - store the original server name
                     server.env = {
                         ...server.env || {},
                         [MCPDefenderEnvVar.OriginalUrl]: originalUrl,
                         [MCPDefenderEnvVar.AppName]: effectiveAppName,
-                        [MCPDefenderEnvVar.ServerName]: key
+                        [MCPDefenderEnvVar.ServerName]: key // Store original name for internal use
                     };
                 } else {
                     logger.debug(`Skipping SSE server protection (disabled): ${key}, URL: ${server.url}`);
@@ -278,13 +306,13 @@ export abstract class BaseMCPConfiguration {
                 const originalArgs = [...server.args];
                 logger.debug(`Protecting STDIO server: ${key}, original command: ${originalCommand}`);
 
-                // Add metadata
+                // Add metadata - store the original server name
                 const newEnv = {
                     ...server.env || {},
                     [MCPDefenderEnvVar.OriginalCommand]: originalCommand,
                     [MCPDefenderEnvVar.OriginalArgs]: JSON.stringify(originalArgs),
                     [MCPDefenderEnvVar.AppName]: effectiveAppName,
-                    [MCPDefenderEnvVar.ServerName]: key
+                    [MCPDefenderEnvVar.ServerName]: key // Store original name for internal use
                 };
 
                 // Update to use our CLI
@@ -296,6 +324,15 @@ export abstract class BaseMCPConfiguration {
                 ];
                 server.env = newEnv;
             }
+        }
+
+        // Apply server renames after iteration to avoid modifying object during iteration
+        for (const { oldKey, newKey, server } of renamedServers) {
+            // Remove old key
+            delete proxiedConfig.mcpServers[oldKey];
+            // Add with new key
+            proxiedConfig.mcpServers[newKey] = server;
+            logger.debug(`Renamed server from "${oldKey}" to "${newKey}"`);
         }
 
         return proxiedConfig;
@@ -545,8 +582,17 @@ export abstract class BaseMCPConfiguration {
             logger.debug('Removed MCP Defender Secure Tools server from unprotected configuration');
         }
 
+        // Track servers that need to be renamed (remove protection indicator)
+        const renamedServers: Array<{ oldKey: string, newKey: string, server: any }> = [];
+
         // Process each server configuration
         for (const [key, server] of Object.entries(unprotectedConfig.mcpServers)) {
+            // Remove protection indicator from server name if present
+            if (key.includes(MCP_DEFENDER_CONSTANTS.PROTECTION_INDICATOR)) {
+                const originalKey = key.replace(MCP_DEFENDER_CONSTANTS.PROTECTION_INDICATOR, '');
+                renamedServers.push({ oldKey: key, newKey: originalKey, server });
+                logger.debug(`Will restore server name from "${key}" to "${originalKey}"`);
+            }
             // Handle SSE servers (URL-based)
             if ('url' in server && server.env?.[MCPDefenderEnvVar.OriginalUrl]) {
                 logger.debug(`Unprotecting SSE server: ${key}`);
@@ -607,6 +653,15 @@ export abstract class BaseMCPConfiguration {
                     }
                 }
             }
+        }
+
+        // Apply server renames after processing to restore original names
+        for (const { oldKey, newKey, server } of renamedServers) {
+            // Remove old key with protection indicator
+            delete unprotectedConfig.mcpServers[oldKey];
+            // Add with original key name
+            unprotectedConfig.mcpServers[newKey] = server;
+            logger.debug(`Restored server name from "${oldKey}" to "${newKey}"`);
         }
 
         return unprotectedConfig;

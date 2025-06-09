@@ -14,6 +14,11 @@ import os from 'node:os';
  * to allow for security verification of tool calls and responses.
  */
 
+// MCP Defender Constants
+const MCP_DEFENDER_CONSTANTS = {
+    SECURITY_ENHANCED_PREFIX: '🔒 SECURITY-ENHANCED: '
+} as const;
+
 // Configuration
 const CONFIG = {
     // Enable debug mode with --debug flag or MCP_DEBUG=true environment variable
@@ -307,7 +312,26 @@ async function processRequest(message: any): Promise<any> {
                 }
             } catch (error) {
                 await log.error(`Tool call verification error`, error);
-                // On error, continue with original message
+                // On error, continue with original message but strip user_intent
+            }
+
+            // If verification passed or failed with error, we need to strip user_intent before forwarding to target
+            if (message.params && message.params.arguments && message.params.arguments.user_intent) {
+                await log.debug(`Stripping user_intent before forwarding to target server`);
+
+                // Create a clean message without user_intent for the target server
+                const cleanMessage = {
+                    ...message,
+                    params: {
+                        ...message.params,
+                        arguments: (() => {
+                            const { user_intent, ...cleanArgs } = message.params.arguments;
+                            return cleanArgs;
+                        })()
+                    }
+                };
+
+                return cleanMessage;
             }
         }
 
@@ -343,14 +367,72 @@ async function processResponse(message: any): Promise<any> {
         if (state.pendingToolsListId !== null && message.id === state.pendingToolsListId && message.result) {
             await log.debug('Received tools list response');
 
-            // Store the tools locally
-            state.discoveredTools = message.result.tools || [];
-            await log.debug(`Discovered ${state.discoveredTools.length} tools`);
+            // Store the original tools locally
+            const originalTools = message.result.tools || [];
+            await log.debug(`Discovered ${originalTools.length} tools`);
 
-            // Send to defender server for tracking
+            // Log tool descriptions for debugging
+            for (const tool of originalTools) {
+                await log.debug(`Tool: ${tool.name}${tool.description ? ` - ${tool.description}` : ' (no description)'}`);
+            }
+
+            // Modify each tool to add user_intent parameter
+            const modifiedTools = originalTools.map((tool: any) => {
+                const modifiedTool = { ...tool };
+
+                // Ensure inputSchema exists
+                if (!modifiedTool.inputSchema) {
+                    modifiedTool.inputSchema = {
+                        type: "object",
+                        properties: {},
+                        required: []
+                    };
+                }
+
+                // Add user_intent to properties
+                modifiedTool.inputSchema.properties = {
+                    ...modifiedTool.inputSchema.properties,
+                    user_intent: {
+                        type: "string",
+                        description: "Explain the reasoning and context for why you are calling this tool. Describe what you're trying to accomplish and how this tool call fits into your overall task. This helps with security monitoring and audit trails."
+                    }
+                };
+
+                // Add user_intent to required fields
+                const requiredFields = modifiedTool.inputSchema.required || [];
+                if (!requiredFields.includes('user_intent')) {
+                    modifiedTool.inputSchema.required = [...requiredFields, 'user_intent'];
+                }
+
+                // Add security-enhanced prefix to description if not already present
+                if (modifiedTool.description && !modifiedTool.description.includes('🔒 SECURITY-ENHANCED')) {
+                    modifiedTool.description = `${MCP_DEFENDER_CONSTANTS.SECURITY_ENHANCED_PREFIX}${modifiedTool.description}`;
+                }
+
+                return modifiedTool;
+            });
+
+            // Update the message with modified tools
+            message.result.tools = modifiedTools;
+
+            // Store both original and modified tools
+            state.discoveredTools = originalTools; // Keep original for registration
+
+            await log.debug(`Modified ${modifiedTools.length} tools to include user_intent parameter`);
+
+            // Send original tools to defender server for tracking (not the modified ones)
             try {
+                // Create enhanced registration data with explicit tool information
+                const toolsWithDescriptions = originalTools.map((tool: any) => ({
+                    name: tool.name,
+                    description: tool.description || null,
+                    parameters: tool.inputSchema || null,
+                    // Preserve any additional tool properties
+                    ...tool
+                }));
+
                 const registrationData = {
-                    tools: state.discoveredTools,
+                    tools: toolsWithDescriptions,
                     serverInfo: {
                         appName: state.appName,
                         name: state.serverName,
@@ -360,7 +442,7 @@ async function processResponse(message: any): Promise<any> {
                     serverName: state.serverName
                 };
 
-                await log.debug(`Registering tools with defender: ${JSON.stringify(registrationData)}`);
+                await log.debug(`Registering ${toolsWithDescriptions.length} tools with defender (preserving descriptions)`);
 
                 await makeApiRequest('/register-tools', registrationData);
                 await log.debug('Successfully registered tools with defender');
