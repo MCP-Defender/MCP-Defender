@@ -371,6 +371,11 @@ async function processResponse(message: any): Promise<any> {
             const originalTools = message.result.tools || [];
             await log.debug(`Discovered ${originalTools.length} tools`);
 
+            // Log tool descriptions for debugging
+            for (const tool of originalTools) {
+                await log.debug(`Tool: ${tool.name}${tool.description ? ` - ${tool.description}` : ' (no description)'}`);
+            }
+
             // Modify each tool to add user_intent parameter
             const modifiedTools = originalTools.map((tool: any) => {
                 const modifiedTool = { ...tool };
@@ -417,8 +422,17 @@ async function processResponse(message: any): Promise<any> {
 
             // Send original tools to defender server for tracking (not the modified ones)
             try {
+                // Create enhanced registration data with explicit tool information
+                const toolsWithDescriptions = originalTools.map((tool: any) => ({
+                    name: tool.name,
+                    description: tool.description || null,
+                    parameters: tool.inputSchema || null,
+                    // Preserve any additional tool properties
+                    ...tool
+                }));
+
                 const registrationData = {
-                    tools: state.discoveredTools, // Use original tools for registration
+                    tools: toolsWithDescriptions,
                     serverInfo: {
                         appName: state.appName,
                         name: state.serverName,
@@ -428,7 +442,7 @@ async function processResponse(message: any): Promise<any> {
                     serverName: state.serverName
                 };
 
-                await log.debug(`Registering tools with defender: ${JSON.stringify(registrationData)}`);
+                await log.debug(`Registering ${toolsWithDescriptions.length} tools with defender (preserving descriptions)`);
 
                 await makeApiRequest('/register-tools', registrationData);
                 await log.debug('Successfully registered tools with defender');

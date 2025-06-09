@@ -66,8 +66,11 @@ export type StatusChangeCallback = (appName: string, app: MCPApplication) => voi
  */
 export interface ServerTool {
     name: string;
-    description?: string;
+    description?: string | null;
+    /** Tool parameters schema (may be called inputSchema in some contexts) */
     parameters?: any;
+    /** Alternative name for parameters in some MCP implementations */
+    inputSchema?: any;
     [key: string]: any;
 }
 
