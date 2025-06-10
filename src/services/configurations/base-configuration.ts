@@ -576,10 +576,18 @@ export abstract class BaseMCPConfiguration {
 
         // Remove MCP Defender Secure Tools server if it exists
         // This server should only be present when MCP Defender is running
-        const secureToolsServerName = 'mcp-defender-secure-tools';
-        if (unprotectedConfig.mcpServers && unprotectedConfig.mcpServers[secureToolsServerName]) {
-            delete unprotectedConfig.mcpServers[secureToolsServerName];
-            logger.debug('Removed MCP Defender Secure Tools server from unprotected configuration');
+        // Check for both old name (mcp-defender-secure-tools) and new name (secure-tools)
+        const oldSecureToolsServerName = 'mcp-defender-secure-tools';
+        const newSecureToolsServerName = 'secure-tools';
+
+        if (unprotectedConfig.mcpServers && unprotectedConfig.mcpServers[oldSecureToolsServerName]) {
+            delete unprotectedConfig.mcpServers[oldSecureToolsServerName];
+            logger.debug('Removed MCP Defender Secure Tools server (old name) from unprotected configuration');
+        }
+
+        if (unprotectedConfig.mcpServers && unprotectedConfig.mcpServers[newSecureToolsServerName]) {
+            delete unprotectedConfig.mcpServers[newSecureToolsServerName];
+            logger.debug('Removed MCP Defender Secure Tools server (new name) from unprotected configuration');
         }
 
         // Track servers that need to be renamed (remove protection indicator)
@@ -668,9 +676,9 @@ export abstract class BaseMCPConfiguration {
     }
 
     /**
-     * Inject MCP Defender Secure Tools server if the setting is enabled
+     * Inject or remove MCP Defender Secure Tools server based on the setting
      * @param config MCP configuration to modify
-     * @returns Modified configuration with secure tools server if enabled
+     * @returns Modified configuration with secure tools server added or removed based on setting
      */
     injectSecureToolsServer(config: MCPConfig): MCPConfig {
         // Get settings from service manager to check if secure tools should be enabled
@@ -684,14 +692,6 @@ export abstract class BaseMCPConfiguration {
 
             const settings = serviceManagerInstance.settingsService.getSettings();
 
-            if (!settings.useMCPDefenderSecureTools) {
-                // Setting is disabled, return config as-is
-                this.logger.debug('MCP Defender Secure Tools setting is disabled');
-                return config;
-            }
-
-            this.logger.info('Injecting MCP Defender Secure Tools server into configuration');
-
             // Create a copy of the config to avoid modifying the original
             const modifiedConfig: MCPConfig = JSON.parse(JSON.stringify(config));
 
@@ -700,13 +700,52 @@ export abstract class BaseMCPConfiguration {
                 modifiedConfig.mcpServers = {};
             }
 
+            // Define server names to check for (both old and new naming)
+            const oldSecureToolsServerName = 'mcp-defender-secure-tools';
+            const newSecureToolsServerName = 'secure-tools';
+
+            if (!settings.useMCPDefenderSecureTools) {
+                // Setting is disabled, remove secure tools server if it exists
+                this.logger.debug('MCP Defender Secure Tools setting is disabled - removing server if present');
+
+                let removedAny = false;
+
+                // Remove old name if it exists
+                if (modifiedConfig.mcpServers[oldSecureToolsServerName]) {
+                    delete modifiedConfig.mcpServers[oldSecureToolsServerName];
+                    this.logger.info('Removed MCP Defender Secure Tools server (old name) from configuration');
+                    removedAny = true;
+                }
+
+                // Remove new name if it exists
+                if (modifiedConfig.mcpServers[newSecureToolsServerName]) {
+                    delete modifiedConfig.mcpServers[newSecureToolsServerName];
+                    this.logger.info('Removed MCP Defender Secure Tools server (new name) from configuration');
+                    removedAny = true;
+                }
+
+                if (!removedAny) {
+                    this.logger.debug('No MCP Defender Secure Tools server found to remove');
+                }
+
+                return modifiedConfig;
+            }
+
+            // Setting is enabled, add secure tools server if it doesn't exist
+            this.logger.info('Injecting MCP Defender Secure Tools server into configuration');
+
             // Add the secure tools server if it doesn't already exist
-            const secureToolsServerName = 'mcp-defender-secure-tools';
-            if (!modifiedConfig.mcpServers[secureToolsServerName]) {
+            if (!modifiedConfig.mcpServers[newSecureToolsServerName]) {
                 // Use the published npm package via npx
-                modifiedConfig.mcpServers[secureToolsServerName] = {
+                modifiedConfig.mcpServers[newSecureToolsServerName] = {
                     command: 'npx',
                     args: ['-y', '@mcp-defender/mcp-defender-secure-tools'],
+                    env: {}
+                };
+
+                modifiedConfig.mcpServers[newSecureToolsServerName] = {
+                    command: 'node',
+                    args: ['/Users/sau/Code/MCP-Defender-Code/MCP-Defender-Secure-Tools/dist/index.js'],
                     env: {}
                 };
                 this.logger.info('Added MCP Defender Secure Tools server to configuration using published package');
@@ -716,7 +755,7 @@ export abstract class BaseMCPConfiguration {
 
             return modifiedConfig;
         } catch (error) {
-            this.logger.error('Failed to inject secure tools server:', error);
+            this.logger.error('Failed to inject/remove secure tools server:', error);
             return config; // Return original config on error
         }
     }

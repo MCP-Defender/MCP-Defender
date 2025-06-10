@@ -233,7 +233,7 @@ const MCPServerCards = ({ servers }: { servers: ProtectedServerConfig[] }) => {
                                                 <span className="text-xs font-semibold">
                                                     {'url' in serverConfig ? 'SSE:' : 'STDIO:'}
                                                 </span>
-                                                <p className="text-xs font-mono line-clamp-2">
+                                                <p className="text-xs font-mono line-clamp-2 break-all overflow-hidden">
                                                     {getOriginalValue()}
                                                 </p>
                                             </div>

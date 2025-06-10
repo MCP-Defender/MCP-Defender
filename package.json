@@ -1,7 +1,7 @@
 {
   "name": "mcp-defender",
   "productName": "MCP Defender",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "MCP Defender",
   "main": ".vite/build/main.js",
   "scripts": {

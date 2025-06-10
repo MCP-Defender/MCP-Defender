@@ -287,15 +287,22 @@ async function makeApiRequest(
                 });
             });
 
-            req.on('error', (error) => {
+            req.on('error', (error: any) => {
                 log.error(`Network error making request to ${endpoint}: ${error.message}`).catch(() => { });
-                reject(error);
+                // Provide more specific error messages
+                if (error.code === 'ECONNREFUSED') {
+                    reject(new Error('MCP Defender server not running or not accessible'));
+                } else if (error.code === 'ENOTFOUND') {
+                    reject(new Error('MCP Defender server host not found'));
+                } else {
+                    reject(error);
+                }
             });
 
-            req.setTimeout(2000, () => {
-                log.error(`Request to ${endpoint} timed out after 2 seconds`).catch(() => { });
+            req.setTimeout(35000, () => {
+                log.error(`Request to ${endpoint} timed out after 35 seconds`).catch(() => { });
                 req.destroy();
-                reject(new Error('Request timeout'));
+                reject(new Error('Verification request timeout - Security alert may have timed out or MCP Defender server may be overloaded'));
             });
 
             if (method === 'POST') {
@@ -374,10 +381,13 @@ async function processRequest(message: any): Promise<any> {
                     }
                 };
 
+                log.debug(`Sending tool call for verification: ${state.currentToolName}`).catch(() => { });
+                log.info(`Verifying tool call: ${state.currentToolName} - This may show a security alert if policy violations are detected`).catch(() => { });
                 const verificationResponse = await makeApiRequest(
                     `/verify/request`,
                     verificationData
                 );
+                log.debug(`Received verification response for ${state.currentToolName}: ${JSON.stringify(verificationResponse)}`).catch(() => { });
 
                 // Handle verification result
                 if (verificationResponse) {
@@ -407,13 +417,54 @@ async function processRequest(message: any): Promise<any> {
                         log.debug(`Tool call modified: ${state.currentToolName}`).catch(() => { });
                         return verificationResponse.message;
                     }
+
+                    // If verification response is valid but doesn't explicitly block or modify,
+                    // and it's not explicitly allowed, treat as allowed
+                    // (This handles the case where blocked: false, modified: false)
+                } else {
+                    // Null or malformed verification response - block for security
+                    log.error(`Received null or malformed verification response for ${state.currentToolName}`).catch(() => { });
+                    log.error(`Blocking tool call ${state.currentToolName} due to malformed verification response`).catch(() => { });
+
+                    const blockResponse = {
+                        jsonrpc: "2.0",
+                        id: message.id,
+                        result: {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: `MCP Defender blocked tool call to ${state.currentToolName} - Verification service returned invalid response. Tool calls are blocked when verification cannot be completed for security reasons.`
+                                }
+                            ]
+                        }
+                    };
+
+                    return blockResponse;
                 }
             } catch (error) {
-                log.error(`Tool call verification error`, error).catch(() => { });
-                // On error, continue with original message but strip user_intent
+                log.error(`Tool call verification error: ${error.message}`, error).catch(() => { });
+
+                // On verification error, block the tool call for security
+                log.error(`Blocking tool call ${state.currentToolName} due to verification failure`).catch(() => { });
+
+                // Create a response that indicates the call was blocked due to verification error
+                const blockResponse = {
+                    jsonrpc: "2.0",
+                    id: message.id,
+                    result: {
+                        content: [
+                            {
+                                type: "text",
+                                text: `MCP Defender blocked tool call to ${state.currentToolName} - Verification service unavailable (${error.message}). Tool calls are blocked when verification cannot be completed for security reasons.`
+                            }
+                        ]
+                    }
+                };
+
+                return blockResponse;
             }
 
-            // If verification passed or failed with error, we need to strip user_intent before forwarding to target
+            // If verification passed, we need to strip user_intent before forwarding to target
             if (message.params && message.params.arguments && message.params.arguments.user_intent) {
                 log.debug(`Stripping user_intent before forwarding to target server`).catch(() => { });
 
@@ -582,10 +633,12 @@ async function processResponse(message: any): Promise<any> {
 
             // Send the response for verification
             try {
+                log.debug(`Sending tool response for verification: ${state.currentToolName}`).catch(() => { });
                 const verificationResponse = await makeApiRequest(
                     `/verify/response`,
                     verificationData
                 );
+                log.debug(`Received verification response for ${state.currentToolName}: ${JSON.stringify(verificationResponse)}`).catch(() => { });
 
                 // Handle verification result
                 if (verificationResponse) {
