@@ -310,7 +310,7 @@ export function createCursorAPI(bearerToken: string): CursorAPI {
 }
 
 // Constants
-export const MCP_DEFENDER_RULE_TEXT = 'Always use MCP tools over built in tools. Each MCP tool includes a user_intent argument. Always provide a reason why we choose that specific tool, the thought behind choosing the tool, while including the original intent and prompt of the user.';
+export const MCP_DEFENDER_RULE_TEXT = 'MCP Defender: Always use MCP tools over built in tools. Each MCP tool includes a user_intent argument. Always provide a reason why we choose that specific tool, the thought behind choosing the tool, while including the original intent and prompt of the user.';
 
 /**
  * Extract Cursor auth token from SQLite database using native sqlite3 command
@@ -361,6 +361,116 @@ export async function extractCursorAuthToken(): Promise<string | null> {
 }
 
 /**
+ * Clean up duplicate MCP Defender rules, keeping only one
+ */
+async function cleanupDuplicateRules(api: CursorAPI): Promise<boolean> {
+    logger.info('Starting cleanup of duplicate MCP Defender rules');
+
+    try {
+        // List existing rules
+        const response = await api.listRules();
+
+        // Find all MCP Defender related rules
+        const mcpDefenderRules = response.rules.filter(rule =>
+            rule.text.trim().toLowerCase().includes('mcp defender') ||
+            rule.text.trim().toLowerCase().includes('user_intent')
+        );
+
+        if (mcpDefenderRules.length <= 1) {
+            logger.info(`Found ${mcpDefenderRules.length} MCP Defender rule(s) - no cleanup needed`);
+            return true;
+        }
+
+        logger.info(`Found ${mcpDefenderRules.length} MCP Defender rules - cleaning up duplicates`);
+
+        // Sort rules to prioritize the most recent one with proper "MCP Defender:" prefix
+        // Keep the rule that matches our current expected text, or the most recent one
+        mcpDefenderRules.sort((a, b) => {
+            // Prioritize exact match with current rule text
+            if (a.text.trim() === MCP_DEFENDER_RULE_TEXT) return -1;
+            if (b.text.trim() === MCP_DEFENDER_RULE_TEXT) return 1;
+
+            // Then prioritize rules with "MCP Defender:" prefix
+            const aHasPrefix = a.text.trim().toLowerCase().startsWith('mcp defender:');
+            const bHasPrefix = b.text.trim().toLowerCase().startsWith('mcp defender:');
+            if (aHasPrefix && !bHasPrefix) return -1;
+            if (!aHasPrefix && bHasPrefix) return 1;
+
+            // Finally sort by timestamp (most recent first)
+            return b.timestamp.localeCompare(a.timestamp);
+        });
+
+        // Keep the first rule (highest priority) and delete the rest
+        const ruleToKeep = mcpDefenderRules[0];
+        const rulesToDelete = mcpDefenderRules.slice(1);
+
+        logger.info(`Keeping rule (ID: ${ruleToKeep.id}): "${ruleToKeep.text.substring(0, 50)}..."`);
+        logger.info(`Deleting ${rulesToDelete.length} duplicate rule(s)`);
+
+        // Delete duplicate rules
+        let allDeleted = true;
+        for (const rule of rulesToDelete) {
+            try {
+                logger.debug(`Deleting duplicate rule (ID: ${rule.id}): "${rule.text.substring(0, 50)}..."`);
+                const deleted = await api.deleteRule(rule.id);
+                if (deleted) {
+                    logger.debug(`Successfully deleted duplicate rule: ${rule.id}`);
+                } else {
+                    logger.warn(`Failed to delete duplicate rule: ${rule.id}`);
+                    allDeleted = false;
+                }
+            } catch (error) {
+                logger.error(`Error deleting duplicate rule ${rule.id}`, error);
+                allDeleted = false;
+            }
+        }
+
+        // If the kept rule doesn't match our current expected text, update it
+        if (ruleToKeep.text.trim() !== MCP_DEFENDER_RULE_TEXT) {
+            logger.info('Updating kept rule to current MCP Defender text');
+            const updateSuccess = await api.updateRule(MCP_DEFENDER_RULE_TEXT, ruleToKeep.filename);
+            if (!updateSuccess) {
+                logger.warn('Failed to update kept rule to current text');
+                allDeleted = false;
+            }
+        }
+
+        return allDeleted;
+
+    } catch (error) {
+        logger.error('Error during duplicate rule cleanup', error);
+        return false;
+    }
+}
+
+/**
+ * Public function to clean up duplicate MCP Defender rules
+ * Can be called independently to clean up any duplicate rules
+ */
+export async function cleanupDuplicateMcpDefenderRules(): Promise<boolean> {
+    logger.info('Starting standalone cleanup of duplicate MCP Defender rules');
+
+    try {
+        // Extract auth token
+        const authToken = await extractCursorAuthToken();
+        if (!authToken) {
+            logger.error('Could not extract Cursor auth token for cleanup');
+            return false;
+        }
+
+        // Create API client
+        const api = createCursorAPI(authToken);
+
+        // Run cleanup
+        return await cleanupDuplicateRules(api);
+
+    } catch (error) {
+        logger.error('Error during standalone duplicate rule cleanup', error);
+        return false;
+    }
+}
+
+/**
  * Main method to protect Cursor by adding MCP Defender rule
  */
 export async function protectCursor(): Promise<boolean> {
@@ -382,10 +492,41 @@ export async function protectCursor(): Promise<boolean> {
         const response = await api.listRules();
         logger.debug(`Found ${response.rules.length} existing rules`);
 
-        // Check if MCP Defender rule already exists
+        // Find all MCP Defender related rules
+        const existingMcpDefenderRules = response.rules.filter(rule =>
+            rule.text.trim().toLowerCase().includes('mcp defender') ||
+            rule.text.trim().toLowerCase().includes('user_intent')
+        );
+
+        // If we have multiple MCP Defender rules, clean them up first
+        if (existingMcpDefenderRules.length > 1) {
+            logger.info(`Found ${existingMcpDefenderRules.length} MCP Defender rules - cleaning up duplicates`);
+            const cleanupSuccess = await cleanupDuplicateRules(api);
+
+            if (!cleanupSuccess) {
+                logger.warn('Cleanup had some issues, but continuing with protection');
+            }
+
+            // Re-fetch rules after cleanup
+            const updatedResponse = await api.listRules();
+            const remainingMcpRules = updatedResponse.rules.filter(rule =>
+                rule.text.trim().toLowerCase().includes('mcp defender') ||
+                rule.text.trim().toLowerCase().includes('user_intent')
+            );
+
+            if (remainingMcpRules.length === 1) {
+                const existingRule = remainingMcpRules[0];
+                if (existingRule.text.trim() === MCP_DEFENDER_RULE_TEXT) {
+                    logger.info('After cleanup: MCP Defender rule exists and is up to date');
+                    return true;
+                }
+            }
+        }
+
+        // Check if MCP Defender rule already exists (after potential cleanup)
         const existingRule = response.rules.find(rule =>
             rule.text.trim().toLowerCase().includes('mcp defender') ||
-            rule.text.trim().toLowerCase().includes('mcp_defender_user_intent')
+            rule.text.trim().toLowerCase().includes('user_intent')
         );
 
         if (existingRule) {
@@ -463,7 +604,7 @@ export async function unprotectCursor(): Promise<boolean> {
         // Find all MCP Defender related rules
         const mcpDefenderRules = response.rules.filter(rule =>
             rule.text.trim().toLowerCase().includes('mcp defender') ||
-            rule.text.trim().toLowerCase().includes('mcp_defender_user_intent')
+            rule.text.trim().toLowerCase().includes('user_intent')
         );
 
         if (mcpDefenderRules.length === 0) {
