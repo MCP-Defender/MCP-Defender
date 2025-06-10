@@ -50,10 +50,10 @@ export enum MCPDefenderEnvVar {
  */
 export const MCP_DEFENDER_CONSTANTS = {
     /** Text appended to server names to indicate they are protected */
-    PROTECTION_INDICATOR: '- 🔒 MCP Defender',
+    PROTECTION_INDICATOR: ' - 🔒 MCP Defender',
 
     /** Prefix added to tool descriptions to indicate security enhancement */
-    SECURITY_ENHANCED_PREFIX: '🔒 SECURITY-ENHANCED: '
+    SECURITY_ENHANCED_PREFIX: '🔒'
 } as const;
 
 /**
