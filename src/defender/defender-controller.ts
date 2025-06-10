@@ -606,21 +606,21 @@ process.parentPort.on('message', (message: any) => {
       console.log(`Starting tool discovery for ${appName}/${serverName} using target URL: ${targetUrl}`);
 
       // Dynamically import and call queryServerTools
-      // import('./transports/http-sse-transport.js')
-      //   .then(({ queryServerTools }) => {
-      //     console.log(`Successfully imported queryServerTools, calling it now...`);
-      //     // Call the function to query tools
-      //     queryServerTools(targetUrl, serverName, appName)
-      //       .then(() => {
-      //         console.log(`Tool discovery request completed for ${appName}/${serverName}`);
-      //       })
-      //       .catch(error => {
-      //         console.error('Error discovering tools:', error);
-      //       });
-      //   })
-      //   .catch(error => {
-      //     console.error('Error importing queryServerTools:', error);
-      //   });
+      import('./transports/http-sse-transport.js')
+        .then(({ queryServerTools }) => {
+          console.log(`Successfully imported queryServerTools, calling it now...`);
+          // Call the function to query tools
+          queryServerTools(targetUrl, serverName, appName)
+            .then(() => {
+              console.log(`Tool discovery request completed for ${appName}/${serverName}`);
+            })
+            .catch(error => {
+              console.error('Error discovering tools:', error);
+            });
+        })
+        .catch(error => {
+          console.error('Error importing queryServerTools:', error);
+        });
       break;
 
     default:

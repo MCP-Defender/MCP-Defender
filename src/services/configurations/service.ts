@@ -191,6 +191,14 @@ export class ConfigurationsService extends BaseService {
             return false;
         }
 
+        // Check if MCP Defender service is ready
+        const serviceManager = ServiceManager.getInstance();
+        const defenderState = serviceManager.defenderService.getState();
+        if (defenderState.status !== 'running') {
+            logger.warn(`Cannot start tool discovery for ${appName}/${serverName}: MCP Defender service is not ready (status: ${defenderState.status})`);
+            return false;
+        }
+
         // Get the application
         const app = this.getApplication(appName);
         if (!app) {
@@ -231,13 +239,70 @@ export class ConfigurationsService extends BaseService {
 
         try {
             logger.info(`Starting tool discovery for STDIO server: ${appName}/${serverName}`);
+            logger.info(`CLI path being used: ${this.cliPath}`);
+            logger.info(`CLI path exists: ${fs.existsSync(this.cliPath)}`);
 
             // Since we know it's a STDIO server at this point, we can safely cast it
             const stdioConfig = server.config;
 
             // Use Node.js executable path instead of Electron to avoid dock icon issues on macOS
-            // This gets the path to the Node.js executable used to run the Electron app
-            const nodePath = process.platform === 'darwin' ? '/usr/local/bin/node' : 'node';
+            // Try to use the current Node.js process executable path, with fallbacks
+            let nodePath: string;
+
+            // Function to check if a path exists and is executable
+            const isExecutable = (path: string): boolean => {
+                try {
+                    fs.accessSync(path, fs.constants.F_OK | fs.constants.X_OK);
+                    return true;
+                } catch {
+                    return false;
+                }
+            };
+
+            // In production builds, process.execPath points to Electron, not Node.js
+            // So we need to find the actual Node.js executable
+            if (process.execPath && process.execPath.includes('node') && !process.execPath.includes('Electron')) {
+                // Use the current Node.js executable if available (development mode)
+                nodePath = process.execPath;
+                logger.info(`Using current Node.js executable: ${nodePath}`);
+            } else {
+                // In production or when using Electron, find Node.js in common locations
+                const commonNodePaths = [
+                    '/usr/local/bin/node',
+                    '/opt/homebrew/bin/node',
+                    '/usr/bin/node',
+                    'node' // System PATH fallback
+                ];
+
+                let foundNode = false;
+                for (const path of commonNodePaths) {
+                    if (path === 'node' || isExecutable(path)) {
+                        nodePath = path;
+                        foundNode = true;
+                        logger.info(`Found Node.js executable at: ${nodePath}`);
+                        break;
+                    }
+                }
+
+                if (!foundNode) {
+                    logger.error('Could not find Node.js executable in common locations');
+                    throw new Error('Node.js executable not found');
+                }
+            }
+
+            logger.info(`Using Node.js path for tool discovery: ${nodePath}`);
+            logger.info(`Spawning process with args: [${this.cliPath}, ${stdioConfig.command}, ${stdioConfig.args.join(', ')}]`);
+
+            // Verify that the Node.js executable and CLI exist before spawning
+            if (!isExecutable(nodePath) && nodePath !== 'node') {
+                throw new Error(`Node.js executable not found or not executable: ${nodePath}`);
+            }
+
+            if (!fs.existsSync(this.cliPath)) {
+                throw new Error(`CLI file not found: ${this.cliPath}`);
+            }
+
+            logger.info(`Pre-spawn checks passed - Node.js: ${nodePath}, CLI: ${this.cliPath}`);
 
             // Create a new process to run the CLI in discovery mode
             // Using the Node.js executable directly prevents system-specific UI artifacts
@@ -262,6 +327,16 @@ export class ConfigurationsService extends BaseService {
 
             logger.info(`Started discovery process for ${appName}/${serverName} with PID: ${discoveryProcess.pid}`);
 
+            // Capture stderr for debugging
+            discoveryProcess.stderr.on('data', (data) => {
+                logger.warn(`Discovery process stderr for ${appName}/${serverName}: ${data.toString()}`);
+            });
+
+            // Capture stdout for debugging
+            discoveryProcess.stdout.on('data', (data) => {
+                logger.debug(`Discovery process stdout for ${appName}/${serverName}: ${data.toString()}`);
+            });
+
             // Unref the process to let it run independently of the parent
             if (discoveryProcess.unref) {
                 discoveryProcess.unref();
@@ -271,7 +346,7 @@ export class ConfigurationsService extends BaseService {
             const timeout = setTimeout(() => {
                 try {
                     logger.warn(`Discovery timed out for ${appName}/${serverName}, killing process`);
-                    discoveryProcess.kill();
+                    discoveryProcess.kill('SIGTERM');
                     this.discoveringTools.delete(serverKey);
 
                     // Update server state to clear discovering status
@@ -280,7 +355,7 @@ export class ConfigurationsService extends BaseService {
                 } catch (e) {
                     // Ignore errors when killing process
                 }
-            }, 10000); // 10 second timeout
+            }, 15000); // Increase timeout to 15 seconds to give more time for registration
 
             // Send tools/list request
             const toolsListRequest = JSON.stringify({
@@ -289,15 +364,16 @@ export class ConfigurationsService extends BaseService {
                 method: "tools/list"
             }) + "\n";
 
+            logger.debug(`Sending tools/list request to ${appName}/${serverName}: ${toolsListRequest.trim()}`);
             discoveryProcess.stdin.write(toolsListRequest);
 
             // Handle process exit
-            discoveryProcess.on('close', (code) => {
+            discoveryProcess.on('close', (code, signal) => {
                 clearTimeout(timeout);
                 if (code === 0) {
                     logger.info(`Tool discovery process completed successfully for ${appName}/${serverName}`);
                 } else {
-                    logger.warn(`Tool discovery process exited with code ${code} for ${appName}/${serverName}`);
+                    logger.warn(`Tool discovery process exited with code ${code} (signal: ${signal}) for ${appName}/${serverName}`);
                     this.discoveringTools.delete(serverKey);
 
                     // Update server state to clear discovering status

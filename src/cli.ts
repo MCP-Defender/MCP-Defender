@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';  // Add synchronous fs for accessSync
 import path from 'node:path';
 import os from 'node:os';
 
@@ -16,7 +17,7 @@ import os from 'node:os';
 
 // MCP Defender Constants
 const MCP_DEFENDER_CONSTANTS = {
-    SECURITY_ENHANCED_PREFIX: '🔒 SECURITY-ENHANCED: '
+    SECURITY_ENHANCED_PREFIX: '🔒'
 } as const;
 
 // Configuration
@@ -109,8 +110,82 @@ const log = {
 // Command arguments
 const cmdIndex = process.argv.indexOf('--debug') > -1 ?
     process.argv.indexOf('--debug') + 1 : 2;
-const command = process.argv[cmdIndex];
+let command = process.argv[cmdIndex];
 const args = process.argv.slice(cmdIndex + 1);
+
+// In production builds, resolve executable paths if needed
+if (command === 'node' || command === 'npx' || command === 'docker') {
+    // Function to check if a path exists and is executable
+    const isExecutable = (path: string): boolean => {
+        try {
+            fsSync.accessSync(path, fsSync.constants.F_OK | fsSync.constants.X_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    // Try to find the executable
+    let executablePath: string;
+
+    if (command === 'node') {
+        // First try the current process's executable path (might be Electron in production)
+        if (process.execPath.includes('node') && isExecutable(process.execPath)) {
+            executablePath = process.execPath;
+        } else {
+            // Try common Node.js locations
+            const possibleNodePaths = [
+                '/usr/local/bin/node',  // Common macOS location
+                '/usr/bin/node',        // Common Linux location
+                '/opt/homebrew/bin/node', // Apple Silicon Homebrew
+                process.env.NODE_PATH ? path.join(process.env.NODE_PATH, 'node') : null,
+            ].filter(Boolean);
+
+            executablePath = 'node'; // fallback
+            for (const possiblePath of possibleNodePaths) {
+                if (possiblePath && isExecutable(possiblePath)) {
+                    executablePath = possiblePath;
+                    break;
+                }
+            }
+        }
+    } else if (command === 'npx') {
+        // Try common npx locations
+        const possibleNpxPaths = [
+            '/usr/local/bin/npx',     // Common macOS location
+            '/usr/bin/npx',           // Common Linux location
+            '/opt/homebrew/bin/npx',  // Apple Silicon Homebrew
+            process.env.NPM_CONFIG_PREFIX ? path.join(process.env.NPM_CONFIG_PREFIX, 'bin', 'npx') : null,
+        ].filter(Boolean);
+
+        executablePath = 'npx'; // fallback
+        for (const possiblePath of possibleNpxPaths) {
+            if (possiblePath && isExecutable(possiblePath)) {
+                executablePath = possiblePath;
+                break;
+            }
+        }
+    } else if (command === 'docker') {
+        // Try common docker locations
+        const possibleDockerPaths = [
+            '/usr/local/bin/docker',  // Common macOS location
+            '/usr/bin/docker',        // Common Linux location
+            '/opt/homebrew/bin/docker', // Apple Silicon Homebrew
+            '/Applications/Docker.app/Contents/Resources/bin/docker', // Docker Desktop on macOS
+        ];
+
+        executablePath = 'docker'; // fallback
+        for (const possiblePath of possibleDockerPaths) {
+            if (isExecutable(possiblePath)) {
+                executablePath = possiblePath;
+                break;
+            }
+        }
+    }
+
+    log.debug(`Resolved executable path from '${command}' to '${executablePath}'`);
+    command = executablePath;
+}
 
 // MCP protocol state
 const state = {
@@ -142,6 +217,13 @@ log.debug(`Command: ${command}`);
 log.debug(`Args: ${args.join(' ')}`);
 if (CONFIG.discoveryMode) {
     log.info('Running in discovery mode - will exit after tools are discovered');
+
+    // In discovery mode, set a timeout to exit if no tools are discovered
+    // Reduced timeout for faster IDE integration
+    setTimeout(() => {
+        log.error('Discovery mode timeout - no tools discovered within 5 seconds').catch(() => { });
+        process.exit(2);
+    }, 5000);
 }
 
 /**
@@ -187,20 +269,33 @@ async function makeApiRequest(
 
                 res.on('end', () => {
                     try {
-                        if (responseData) {
-                            const parsedData = JSON.parse(responseData);
-                            resolve(parsedData);
+                        log.debug(`API response from ${endpoint}: status=${res.statusCode}, data=${responseData}`);
+
+                        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                            if (responseData) {
+                                const parsedData = JSON.parse(responseData);
+                                resolve(parsedData);
+                            } else {
+                                resolve({});
+                            }
                         } else {
-                            resolve({});
+                            reject(new Error(`API request failed with status ${res.statusCode}: ${responseData}`));
                         }
                     } catch (e) {
-                        reject(new Error(`Invalid response: ${responseData}`));
+                        reject(new Error(`Invalid response from ${endpoint}: ${responseData}`));
                     }
                 });
             });
 
             req.on('error', (error) => {
+                log.error(`Network error making request to ${endpoint}: ${error.message}`).catch(() => { });
                 reject(error);
+            });
+
+            req.setTimeout(2000, () => {
+                log.error(`Request to ${endpoint} timed out after 2 seconds`).catch(() => { });
+                req.destroy();
+                reject(new Error('Request timeout'));
             });
 
             if (method === 'POST') {
@@ -247,12 +342,12 @@ async function processRequest(message: any): Promise<any> {
     try {
         // Handle MCP initialization
         if (message.method === 'initialize' && message.id === 0) {
-            await log.debug('Detected MCP initialize request');
+            log.debug('Detected MCP initialize request').catch(() => { });
         }
 
         // Detect tools/list request - we'll track this to capture the response
         if (message.method === 'tools/list') {
-            await log.debug(`Detected tools list request with ID: ${message.id}`);
+            log.debug(`Detected tools list request with ID: ${message.id}`).catch(() => { });
             state.pendingToolsListId = message.id;
         }
 
@@ -264,7 +359,7 @@ async function processRequest(message: any): Promise<any> {
             state.currentToolName = params.name || 'unknown';
             state.currentToolId = message.id || null;
 
-            await log.debug(`Detected tool call: ${state.currentToolName} (ID: ${state.currentToolId})`);
+            log.debug(`Detected tool call: ${state.currentToolName} (ID: ${state.currentToolId})`).catch(() => { });
 
             // Send the tool call for verification
             try {
@@ -288,7 +383,7 @@ async function processRequest(message: any): Promise<any> {
                 if (verificationResponse) {
                     // If tool call is blocked
                     if (verificationResponse.blocked) {
-                        await log.debug(`Tool call blocked: ${state.currentToolName} - Reason: ${verificationResponse.reason || 'Policy violation'}`);
+                        log.debug(`Tool call blocked: ${state.currentToolName} - Reason: ${verificationResponse.reason || 'Policy violation'}`).catch(() => { });
 
                         // Create a response that indicates the call was blocked
                         const blockResponse = {
@@ -309,18 +404,18 @@ async function processRequest(message: any): Promise<any> {
 
                     // If tool call is modified
                     if (verificationResponse.modified && verificationResponse.message) {
-                        await log.debug(`Tool call modified: ${state.currentToolName}`);
+                        log.debug(`Tool call modified: ${state.currentToolName}`).catch(() => { });
                         return verificationResponse.message;
                     }
                 }
             } catch (error) {
-                await log.error(`Tool call verification error`, error);
+                log.error(`Tool call verification error`, error).catch(() => { });
                 // On error, continue with original message but strip user_intent
             }
 
             // If verification passed or failed with error, we need to strip user_intent before forwarding to target
             if (message.params && message.params.arguments && message.params.arguments.user_intent) {
-                await log.debug(`Stripping user_intent before forwarding to target server`);
+                log.debug(`Stripping user_intent before forwarding to target server`).catch(() => { });
 
                 // Create a clean message without user_intent for the target server
                 const cleanMessage = {
@@ -340,13 +435,14 @@ async function processRequest(message: any): Promise<any> {
 
         // Add this inside processRequest function right before returning the message:
         if (message.method && message.method.startsWith('tools/')) {
-            await log.debug(`Handling MCP method: ${message.method}, params: ${JSON.stringify(message.params)}`);
+            log.debug(`Handling MCP method: ${message.method}, params: ${JSON.stringify(message.params)}`).catch(() => { });
         }
 
         // For non-tool calls or verified tool calls, pass through
+        log.debug(`Returning message from processRequest: ${JSON.stringify(message)}`).catch(() => { });
         return message;
     } catch (error) {
-        await log.error('Error processing request', error);
+        log.error('Error processing request', error).catch(() => { });
         return message; // Pass through on error
     }
 }
@@ -358,28 +454,27 @@ async function processResponse(message: any): Promise<any> {
     try {
         // Add debug info about the message we're processing
         if (state.currentToolName && message.id === state.currentToolId) {
-            await log.debug(`Received potential response for tool ${state.currentToolName} with ID ${state.currentToolId}`);
+            log.debug(`Received potential response for tool ${state.currentToolName} with ID ${state.currentToolId}`).catch(() => { });
         }
 
         // Check for server info in initialize response
         if (message.id === 0 && message.result && message.result.serverInfo) {
-            await extractServerInfo(message);
+            extractServerInfo(message).catch(() => { }); // Non-blocking
         }
 
         // Check if this is a response to a tools/list request
         if (state.pendingToolsListId !== null && message.id === state.pendingToolsListId && message.result) {
-            await log.debug('Received tools list response');
+            log.debug('Received tools list response').catch(() => { }); // Non-blocking
 
             // Store the original tools locally
             const originalTools = message.result.tools || [];
-            await log.debug(`Discovered ${originalTools.length} tools`);
 
-            // Log tool descriptions for debugging
-            for (const tool of originalTools) {
-                await log.debug(`Tool: ${tool.name}${tool.description ? ` - ${tool.description}` : ' (no description)'}`);
+            // Quick sync logging for critical info
+            if (CONFIG.debug) {
+                console.error(`[DEBUG] Discovered ${originalTools.length} tools`);
             }
 
-            // Modify each tool to add user_intent parameter
+            // Modify each tool to add user_intent parameter (synchronous operation)
             const modifiedTools = originalTools.map((tool: any) => {
                 const modifiedTool = { ...tool };
 
@@ -415,58 +510,56 @@ async function processResponse(message: any): Promise<any> {
                 return modifiedTool;
             });
 
-            // Update the message with modified tools
+            // Update the message with modified tools (this needs to happen synchronously)
             message.result.tools = modifiedTools;
 
             // Store both original and modified tools
             state.discoveredTools = originalTools; // Keep original for registration
 
-            await log.debug(`Modified ${modifiedTools.length} tools to include user_intent parameter`);
+            // Register tools with defender in background (non-blocking)
+            setImmediate(async () => {
+                try {
+                    // Create enhanced registration data with explicit tool information
+                    const toolsWithDescriptions = originalTools.map((tool: any) => ({
+                        name: tool.name,
+                        description: tool.description || null,
+                        parameters: tool.inputSchema || null,
+                        // Preserve any additional tool properties
+                        ...tool
+                    }));
 
-            // Send original tools to defender server for tracking (not the modified ones)
-            try {
-                // Create enhanced registration data with explicit tool information
-                const toolsWithDescriptions = originalTools.map((tool: any) => ({
-                    name: tool.name,
-                    description: tool.description || null,
-                    parameters: tool.inputSchema || null,
-                    // Preserve any additional tool properties
-                    ...tool
-                }));
-
-                const registrationData = {
-                    tools: toolsWithDescriptions,
-                    serverInfo: {
+                    const registrationData = {
+                        tools: toolsWithDescriptions,
+                        serverInfo: {
+                            appName: state.appName,
+                            name: state.serverName,
+                            version: state.serverVersion
+                        },
                         appName: state.appName,
-                        name: state.serverName,
-                        version: state.serverVersion
-                    },
-                    appName: state.appName,
-                    serverName: state.serverName
-                };
+                        serverName: state.serverName
+                    };
 
-                await log.debug(`Registering ${toolsWithDescriptions.length} tools with defender (preserving descriptions)`);
+                    await makeApiRequest('/register-tools', registrationData);
+                    log.debug('Successfully registered tools with defender').catch(() => { });
 
-                await makeApiRequest('/register-tools', registrationData);
-                await log.debug('Successfully registered tools with defender');
+                    // In discovery mode, exit after successfully registering tools
+                    if (state.exitAfterDiscovery) {
+                        log.info(`Discovery mode: Exiting after successful tool registration`).catch(() => { });
+                        setTimeout(() => {
+                            process.exit(0);
+                        }, 100); // Shorter delay since response is already sent
+                    }
+                } catch (error) {
+                    log.error('Failed to register tools with defender', error).catch(() => { });
 
-                // In discovery mode, exit after successfully registering tools
-                if (state.exitAfterDiscovery) {
-                    await log.info(`Discovery mode: Exiting after successful tool registration`);
-                    setTimeout(() => {
-                        process.exit(0);
-                    }, 500); // Small delay to ensure message is sent
+                    if (state.exitAfterDiscovery) {
+                        log.error('Discovery mode: Exiting after failed tool registration').catch(() => { });
+                        setTimeout(() => {
+                            process.exit(1);
+                        }, 100);
+                    }
                 }
-            } catch (error) {
-                await log.error('Failed to register tools with defender', error);
-
-                if (state.exitAfterDiscovery) {
-                    await log.error('Discovery mode: Exiting after failed tool registration');
-                    setTimeout(() => {
-                        process.exit(1);
-                    }, 500);
-                }
-            }
+            });
 
             // Clear pending ID
             state.pendingToolsListId = null;
@@ -475,7 +568,7 @@ async function processResponse(message: any): Promise<any> {
         // Check if this is a response to a tool call
         // In MCP, tool responses have a result property and match our tracked currentToolId
         if (message.result && state.currentToolName && message.id && message.id === state.currentToolId) {
-            await log.debug(`Detected response for tool: ${state.currentToolName}`);
+            log.debug(`Detected response for tool: ${state.currentToolName}`).catch(() => { });
 
             const verificationData: VerificationData = {
                 message,
@@ -498,7 +591,7 @@ async function processResponse(message: any): Promise<any> {
                 if (verificationResponse) {
                     // If response is blocked
                     if (verificationResponse.blocked) {
-                        await log.debug(`Tool response blocked: ${state.currentToolName} - Reason: ${verificationResponse.reason || 'Policy violation'}`);
+                        log.debug(`Tool response blocked: ${state.currentToolName} - Reason: ${verificationResponse.reason || 'Policy violation'}`).catch(() => { });
 
                         // Create a response that indicates the result was blocked
                         const blockResponse = {
@@ -523,7 +616,7 @@ async function processResponse(message: any): Promise<any> {
 
                     // If response is modified
                     if (verificationResponse.modified && verificationResponse.message) {
-                        await log.debug(`Tool response modified: ${state.currentToolName}`);
+                        log.debug(`Tool response modified: ${state.currentToolName}`).catch(() => { });
 
                         // Clear tool state
                         state.currentToolName = null;
@@ -533,7 +626,7 @@ async function processResponse(message: any): Promise<any> {
                     }
                 }
             } catch (error) {
-                await log.error('Tool response verification error', error);
+                log.error('Tool response verification error', error).catch(() => { });
             }
 
             // Clear tool info after processing the response
@@ -544,131 +637,193 @@ async function processResponse(message: any): Promise<any> {
         // For non-tool responses or verified responses, pass through
         return message;
     } catch (error) {
-        await log.error('Error processing response', error);
+        log.error('Error processing response', error).catch(() => { });
         state.currentToolName = null;
         state.currentToolId = null;
         return message; // Pass through on error
     }
 }
 
-// Handle signals to ensure clean shutdown
-async function handleSignal(signal: NodeJS.Signals): Promise<void> {
-    await log.debug(`Received ${signal}, shutting down`);
+// Main execution wrapped in async function
+(async function main() {
+    // Ensure log directory exists
+    await ensureLogDirectory();
 
-    if (targetServer) {
-        targetServer.kill(signal);
+    // Handle signals to ensure clean shutdown
+    async function handleSignal(signal: NodeJS.Signals, targetServer: any): Promise<void> {
+        await log.debug(`Received ${signal}, shutting down`);
+
+        if (targetServer) {
+            targetServer.kill(signal);
+        }
+        process.exit(0);
     }
-    process.exit(0);
-}
 
-// Set up signal handlers
-process.on('SIGINT', () => {
-    handleSignal('SIGINT').catch(err => console.error('Error in signal handler:', err));
-});
-process.on('SIGTERM', () => {
-    handleSignal('SIGTERM').catch(err => console.error('Error in signal handler:', err));
-});
+    // Start the target MCP server
+    async function startTargetServer() {
+        // Prepare environment with proper PATH for spawned processes
+        const spawnEnv = { ...process.env };
 
-// Remove all the HTTP-based log sending code
-// Just handle process exit for cleanup
-process.on('exit', () => {
-    console.error('Process exiting');
-});
+        // Ensure the directory containing the node executable is in PATH
+        if (command.includes('/')) {
+            // If we resolved an absolute path for the command, add its directory to PATH
+            const commandDir = path.dirname(command);
+            const currentPath = spawnEnv.PATH || '';
 
-// Start the target MCP server
-const targetServer = spawn(command, args, {
-    stdio: ['pipe', 'pipe', 'inherit'],
-    env: process.env
-});
+            // Add the command directory to the beginning of PATH if it's not already there
+            if (!currentPath.split(path.delimiter).includes(commandDir)) {
+                spawnEnv.PATH = commandDir + path.delimiter + currentPath;
+                await log.debug(`Added ${commandDir} to PATH for spawned process`);
+            }
+        }
 
-// Set up error handling for target process
-targetServer.on('error', (error) => {
-    log.error(`Failed to start target server: ${error.message}`).catch(err => {
-        console.error('Failed to log error:', err);
+        // Also add common Node.js binary locations to PATH as fallback
+        const commonNodeDirs = [
+            '/usr/local/bin',
+            '/usr/bin',
+            '/opt/homebrew/bin'
+        ];
+
+        let pathUpdated = false;
+        for (const dir of commonNodeDirs) {
+            const currentPath = spawnEnv.PATH || '';
+            if (!currentPath.split(path.delimiter).includes(dir)) {
+                spawnEnv.PATH = (spawnEnv.PATH || '') + path.delimiter + dir;
+                pathUpdated = true;
+            }
+        }
+
+        if (pathUpdated) {
+            await log.debug(`Updated PATH for spawned process: ${spawnEnv.PATH}`);
+        }
+
+        return spawn(command, args, {
+            stdio: ['pipe', 'pipe', 'inherit'],
+            env: spawnEnv
+        });
+    }
+
+    // Start the server
+    const targetServer = await startTargetServer();
+
+    // Set up error handling for target process
+    targetServer.on('error', (error) => {
+        log.error(`Failed to start target server: ${error.message}`).catch(err => {
+            console.error('Failed to log error:', err);
+        });
+        process.exit(1);
     });
-    process.exit(1);
-});
 
-// Handle target server exit
-targetServer.on('close', (code) => {
-    log.debug(`Target server exited with code ${code || 0}`).catch(err => {
-        console.error('Failed to log message:', err);
+    // Handle target server exit
+    targetServer.on('close', (code) => {
+        log.debug(`Target server exited with code ${code || 0}`).catch(err => {
+            console.error('Failed to log message:', err);
+        });
+        process.exit(code || 0);
     });
-    process.exit(code || 0);
-});
 
-// Set up read buffers for processing JSON-RPC messages
-const stdinBuffer = new ReadBuffer();
-const targetStdoutBuffer = new ReadBuffer();
+    // Set up read buffers for processing JSON-RPC messages
+    const stdinBuffer = new ReadBuffer();
+    const targetStdoutBuffer = new ReadBuffer();
 
-// Handle messages from stdin (from MCP client)
-process.stdin.on('data', async (chunk) => {
-    await log.debug(`Received ${chunk.length} bytes from stdin`);
+    // Handle messages from stdin (from MCP client)
+    process.stdin.on('data', async (chunk) => {
+        // Non-blocking debug logging
+        log.debug(`Received ${chunk.length} bytes from stdin`).catch(() => { });
 
-    // Add data to buffer
-    stdinBuffer.append(chunk);
+        // Add data to buffer
+        stdinBuffer.append(chunk);
 
-    // Process all complete messages in the buffer
-    while (true) {
-        try {
-            const message = stdinBuffer.readMessage();
-            if (!message) break;
+        // Process all complete messages in the buffer
+        while (true) {
+            try {
+                const message = stdinBuffer.readMessage();
+                if (!message) break;
 
-            await log.debug(`Processing message from stdin: ${JSON.stringify(message)}`);
+                // Non-blocking debug logging
+                log.debug(`Processing message from stdin: ${JSON.stringify(message)}`).catch(() => { });
 
-            // Process the message before forwarding
-            const processedMessage = await processRequest(message);
+                // Process the message before forwarding
+                const processedMessage = await processRequest(message);
 
-            // If the processed message is a block response (different from the original),
-            // send it directly to stdout instead of to the target server
-            if (processedMessage !== message && processedMessage.result) {
-                await log.debug(`Sending block response directly to stdout`);
+                // If the processed message is a block response (different from the original),
+                // send it directly to stdout instead of to the target server
+                if (processedMessage !== message && processedMessage.result) {
+                    log.debug(`Sending block response directly to stdout`).catch(() => { });
+                    const serialized = serializeMessage(processedMessage);
+                    process.stdout.write(serialized);
+                    continue;
+                }
+
+                // Otherwise, forward to target server's stdin
+                const serialized = serializeMessage(processedMessage);
+                log.debug(`Forwarding message to target server: ${serialized.trim()}`).catch(() => { });
+                targetServer.stdin.write(serialized);
+            } catch (error) {
+                log.error('Failed to process stdin message', error).catch(() => { });
+            }
+        }
+    });
+
+    // Handle messages from target server's stdout (to MCP client)
+    targetServer.stdout.on('data', async (chunk) => {
+        // Non-blocking debug logging
+        log.debug(`Received ${chunk.length} bytes from target server: ${chunk.toString()}`).catch(() => { });
+
+        // Add data to buffer
+        targetStdoutBuffer.append(chunk);
+
+        // Process all complete messages in the buffer
+        while (true) {
+            try {
+                const message = targetStdoutBuffer.readMessage();
+                if (!message) break;
+
+                // Non-blocking debug logging
+                log.debug(`Processing message from server: ${JSON.stringify(message)}`).catch(() => { });
+
+                // Process the message before forwarding
+                const processedMessage = await processResponse(message);
+
+                // Forward to our stdout (to MCP client)
                 const serialized = serializeMessage(processedMessage);
                 process.stdout.write(serialized);
-                continue;
+            } catch (error) {
+                log.error('Failed to process server message', error).catch(() => { });
             }
-
-            // Otherwise, forward to target server's stdin
-            const serialized = serializeMessage(processedMessage);
-            targetServer.stdin.write(serialized);
-        } catch (error) {
-            await log.error('Failed to process stdin message', error);
         }
-    }
-});
-
-// Handle messages from target server's stdout (to MCP client)
-targetServer.stdout.on('data', async (chunk) => {
-    await log.debug(`Received ${chunk.length} bytes from target server`);
-
-    // Add data to buffer
-    targetStdoutBuffer.append(chunk);
-
-    // Process all complete messages in the buffer
-    while (true) {
-        try {
-            const message = targetStdoutBuffer.readMessage();
-            if (!message) break;
-
-            await log.debug(`Processing message from server: ${JSON.stringify(message)}`);
-
-            // Process the message before forwarding
-            const processedMessage = await processResponse(message);
-
-            // Forward to our stdout (to MCP client)
-            const serialized = serializeMessage(processedMessage);
-            process.stdout.write(serialized);
-        } catch (error) {
-            await log.error('Failed to process server message', error);
-        }
-    }
-});
-
-// Handle stdin end
-process.stdin.on('end', () => {
-    log.debug('stdin ended, closing target server').catch(err => {
-        console.error('Failed to log message:', err);
     });
 
-    targetServer.stdin.end();
+    // Handle stdin end
+    process.stdin.on('end', () => {
+        log.debug('stdin ended, closing target server').catch(err => {
+            console.error('Failed to log message:', err);
+        });
+
+        if (CONFIG.discoveryMode) {
+            // In discovery mode, don't immediately close the target server
+            // Wait for the tools response or timeout
+            log.debug('Discovery mode: keeping target server alive to receive tools response').catch(() => { });
+        } else {
+            targetServer.stdin.end();
+        }
+    });
+
+    // Set up signal handlers
+    process.on('SIGINT', () => {
+        handleSignal('SIGINT', targetServer).catch(err => console.error('Error in signal handler:', err));
+    });
+    process.on('SIGTERM', () => {
+        handleSignal('SIGTERM', targetServer).catch(err => console.error('Error in signal handler:', err));
+    });
+
+    // Remove all the HTTP-based log sending code
+    // Just handle process exit for cleanup
+    process.on('exit', () => {
+        console.error('Process exiting');
+    });
+
+})().catch(error => {
+    console.error('Fatal error in main execution:', error);
+    process.exit(1);
 });
