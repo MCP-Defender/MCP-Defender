@@ -1,4 +1,5 @@
 import { ScanResult, SignatureVerification, SignatureVerificationMap } from '../services/scans/types';
+type ScanServiceResult = ScanResult;
 import { Signature } from '../services/signatures/types';
 import { OpenAI } from 'openai';
 import type { ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from 'openai/resources';
@@ -61,6 +62,11 @@ interface VerificationRequest {
     content: any;
     userIntent?: string;
     toolDescription?: string | null;
+    serverInfo?: {
+        serverName: string;
+        serverVersion?: string;
+        appName?: string;
+    };
 }
 
 /**
@@ -175,9 +181,21 @@ function processVerificationResults(
 /**
  * Make a verification request using the backend API
  * @param prompt The verification prompt to send
+ * @param appVersion MCP Defender application version
+ * @param appPlatform MCP Defender application platform  
+ * @param mcpClient The MCP client name (e.g., "Cursor", "Claude Desktop")
+ * @param mcpServer The MCP server name
+ * @param mcpTool The MCP tool name
  * @returns The verification response
  */
-async function makeBackendVerificationRequest(prompt: string): Promise<{ model_name: string, response: string }> {
+async function makeBackendVerificationRequest(
+    prompt: string,
+    appVersion?: string,
+    appPlatform?: string,
+    mcpClient?: string,
+    mcpServer?: string,
+    mcpTool?: string
+): Promise<{ model_name: string, response: string }> {
     const loginToken = state.settings.loginToken;
 
     if (!loginToken) {
@@ -185,7 +203,31 @@ async function makeBackendVerificationRequest(prompt: string): Promise<{ model_n
     }
 
     try {
-        const url = `${BACKEND_API_URL}/scan?login_request_id=${encodeURIComponent(loginToken)}`;
+        // Build URL with base parameters
+        const params = new URLSearchParams({
+            login_request_id: loginToken
+        });
+
+        // Add app metadata if provided
+        if (appVersion) {
+            params.append('app_version', appVersion);
+        }
+        if (appPlatform) {
+            params.append('app_platform', appPlatform);
+        }
+
+        // Add MCP context if provided
+        if (mcpClient) {
+            params.append('mcp_client', mcpClient);
+        }
+        if (mcpServer) {
+            params.append('mcp_server', mcpServer);
+        }
+        if (mcpTool) {
+            params.append('mcp_tool', mcpTool);
+        }
+
+        const url = `${BACKEND_API_URL}/scan?${params.toString()}`;
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -214,7 +256,12 @@ async function makeBackendVerificationRequest(prompt: string): Promise<{ model_n
  */
 async function makeVerificationRequest(
     instructions: string,
-    input: string
+    input: string,
+    appVersion?: string,
+    appPlatform?: string,
+    mcpClient?: string,
+    mcpServer?: string,
+    mcpTool?: string
 ): Promise<string> {
     const loginToken = state.settings.loginToken;
     const llmSettings = state.settings.llm;
@@ -224,7 +271,14 @@ async function makeVerificationRequest(
         try {
             console.log('Using backend API for verification');
             const fullPrompt = `${instructions}\n\n${input}`;
-            const result = await makeBackendVerificationRequest(fullPrompt);
+            const result = await makeBackendVerificationRequest(
+                fullPrompt,
+                appVersion,
+                appPlatform,
+                mcpClient,
+                mcpServer,
+                mcpTool
+            );
             return result.response;
         } catch (error) {
             throw new Error('Verification failed with error: ' + error);
@@ -421,7 +475,7 @@ function createDefaultVerificationResult(
  * Core verification function that can handle both tool calls and responses
  */
 async function verifyContent(request: VerificationRequest): Promise<VerificationResult> {
-    const { type, toolName, content, userIntent, toolDescription } = request;
+    const { type, toolName, content, userIntent, toolDescription, serverInfo } = request;
 
     console.log(`Verifying ${type === 'tool_call' ? 'tool call' : 'tool response'}: ${toolName}`);
 
@@ -458,8 +512,24 @@ async function verifyContent(request: VerificationRequest): Promise<Verification
         const instructions = generateVerificationInstructions(type, userIntent);
         const input = generateVerificationInput(type, toolName, formattedContent, userIntent, toolDescription);
 
-        // Make the verification request
-        const output = await makeVerificationRequest(instructions, input);
+        // Make the verification request with context
+        const mcpClient = serverInfo?.appName;
+        const mcpServer = serverInfo?.serverName;
+        const mcpTool = toolName;
+
+        // Get app metadata from state
+        const defenderAppVersion = state.settings.appVersion;
+        const defenderAppPlatform = state.settings.appPlatform;
+
+        const output = await makeVerificationRequest(
+            instructions,
+            input,
+            defenderAppVersion,
+            defenderAppPlatform,
+            mcpClient,
+            mcpServer,
+            mcpTool
+        );
 
         // Process the results
         const result = processVerificationResults(output, modelName);
@@ -644,21 +714,12 @@ async function handleUserDecision(
 }
 
 /**
- * Verifies a tool call and records the scan result
- * 
- * @param toolName The name of the tool being called
- * @param args The arguments to the tool
- * @param serverInfo Server information to include in the scan result
- * @returns The verification result with allowed status and verification map
+ * Verify a tool call against security policies
  */
 export async function verifyToolCall(
     toolName: string,
     args: any,
-    serverInfo: {
-        serverName: string;
-        serverVersion?: string;
-        appName?: string;
-    },
+    serverInfo: any,
     userIntent?: string
 ): Promise<{
     allowed: boolean,
@@ -720,7 +781,8 @@ export async function verifyToolCall(
                 toolName,
                 content: args,
                 userIntent,
-                toolDescription
+                toolDescription,
+                serverInfo
             });
         } else {
             // Skip verification but create a record indicating it was skipped
@@ -885,7 +947,8 @@ export async function verifyToolResponse(
             verification = await verifyContent({
                 type: 'tool_response',
                 toolName,
-                content: response
+                content: response,
+                serverInfo
             });
         } else {
             // Skip verification but create a record indicating it was skipped

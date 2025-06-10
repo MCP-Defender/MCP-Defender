@@ -52,6 +52,7 @@ export enum DefenderServiceEvent {
     UPDATE_SETTINGS = 'defender-service:update-settings',
     UPDATE_SIGNATURES = 'defender-service:update-signatures',
     UPDATE_CONFIGURATIONS = 'defender-service:update-configurations',
+    UPDATE_APP_METADATA = 'defender-service:update-app-metadata',
     STATUS = 'defender-service:status',
     READY = 'defender-service:ready',
     SECURITY_ALERT_RESPONSE = 'defender-service:security-alert-response',

@@ -155,6 +155,15 @@ export class DefenderService extends BaseService {
             this.process.on('spawn', () => {
                 this.logger.info('[DEFENDER SERVER]: Defender process spawned with PID:', this.process?.pid);
 
+                // Post app metadata first
+                this.process.postMessage({
+                    type: DefenderServiceEvent.UPDATE_APP_METADATA,
+                    data: {
+                        appVersion: app.getVersion(),
+                        appPlatform: process.platform
+                    }
+                });
+
                 // Post a message to the defender process to start it
                 this.process.postMessage({
                     type: DefenderServiceEvent.START_SERVER,

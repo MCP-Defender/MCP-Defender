@@ -17,6 +17,8 @@ export interface ScanSettings {
         provider: string;
     };
     disabledSignatures: Set<string>;
+    appVersion: string;
+    appPlatform: string;
 }
 
 /**
