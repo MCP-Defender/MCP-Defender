@@ -51,7 +51,9 @@ const state: DefenderState = {
       apiKey: null,
       provider: ""
     },
-    disabledSignatures: new Set<string>()
+    disabledSignatures: new Set<string>(),
+    appVersion: "",
+    appPlatform: ""
   }
 };
 
@@ -575,6 +577,23 @@ process.parentPort.on('message', (message: any) => {
         }
       } catch (err) {
         console.error('Error updating protected servers:', err);
+      }
+      break;
+
+    case DefenderServiceEvent.UPDATE_APP_METADATA:
+      console.log('Received app metadata update');
+
+      try {
+        const { appVersion, appPlatform } = messageData;
+        if (appVersion && appPlatform) {
+          state.settings.appVersion = appVersion;
+          state.settings.appPlatform = appPlatform;
+          console.log(`Updated app metadata: version=${appVersion}, platform=${appPlatform}`);
+        } else {
+          console.error('Invalid app metadata:', messageData);
+        }
+      } catch (err) {
+        console.error('Error updating app metadata:', err);
       }
       break;
 

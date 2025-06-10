@@ -124,6 +124,9 @@ const state = {
     appName: process.env.MCP_DEFENDER_APP_NAME || 'unknown',
     serverName: process.env.MCP_DEFENDER_SERVER_NAME || 'unknown',
     serverVersion: "unknown",
+    // App metadata from MCP Defender
+    appVersion: process.env.MCP_DEFENDER_APP_VERSION || 'unknown',
+    appPlatform: process.env.MCP_DEFENDER_APP_PLATFORM || 'unknown',
     // Flag to exit after tool discovery is complete
     exitAfterDiscovery: CONFIG.discoveryMode
 };
