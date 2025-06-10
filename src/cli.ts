@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import fsSync from 'node:fs';  // Add synchronous fs for accessSync
 import path from 'node:path';
 import os from 'node:os';
 
@@ -109,8 +110,82 @@ const log = {
 // Command arguments
 const cmdIndex = process.argv.indexOf('--debug') > -1 ?
     process.argv.indexOf('--debug') + 1 : 2;
-const command = process.argv[cmdIndex];
+let command = process.argv[cmdIndex];
 const args = process.argv.slice(cmdIndex + 1);
+
+// In production builds, resolve executable paths if needed
+if (command === 'node' || command === 'npx' || command === 'docker') {
+    // Function to check if a path exists and is executable
+    const isExecutable = (path: string): boolean => {
+        try {
+            fsSync.accessSync(path, fsSync.constants.F_OK | fsSync.constants.X_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+
+    // Try to find the executable
+    let executablePath: string;
+
+    if (command === 'node') {
+        // First try the current process's executable path (might be Electron in production)
+        if (process.execPath.includes('node') && isExecutable(process.execPath)) {
+            executablePath = process.execPath;
+        } else {
+            // Try common Node.js locations
+            const possibleNodePaths = [
+                '/usr/local/bin/node',  // Common macOS location
+                '/usr/bin/node',        // Common Linux location
+                '/opt/homebrew/bin/node', // Apple Silicon Homebrew
+                process.env.NODE_PATH ? path.join(process.env.NODE_PATH, 'node') : null,
+            ].filter(Boolean);
+
+            executablePath = 'node'; // fallback
+            for (const possiblePath of possibleNodePaths) {
+                if (possiblePath && isExecutable(possiblePath)) {
+                    executablePath = possiblePath;
+                    break;
+                }
+            }
+        }
+    } else if (command === 'npx') {
+        // Try common npx locations
+        const possibleNpxPaths = [
+            '/usr/local/bin/npx',     // Common macOS location
+            '/usr/bin/npx',           // Common Linux location
+            '/opt/homebrew/bin/npx',  // Apple Silicon Homebrew
+            process.env.NPM_CONFIG_PREFIX ? path.join(process.env.NPM_CONFIG_PREFIX, 'bin', 'npx') : null,
+        ].filter(Boolean);
+
+        executablePath = 'npx'; // fallback
+        for (const possiblePath of possibleNpxPaths) {
+            if (possiblePath && isExecutable(possiblePath)) {
+                executablePath = possiblePath;
+                break;
+            }
+        }
+    } else if (command === 'docker') {
+        // Try common docker locations
+        const possibleDockerPaths = [
+            '/usr/local/bin/docker',  // Common macOS location
+            '/usr/bin/docker',        // Common Linux location
+            '/opt/homebrew/bin/docker', // Apple Silicon Homebrew
+            '/Applications/Docker.app/Contents/Resources/bin/docker', // Docker Desktop on macOS
+        ];
+
+        executablePath = 'docker'; // fallback
+        for (const possiblePath of possibleDockerPaths) {
+            if (isExecutable(possiblePath)) {
+                executablePath = possiblePath;
+                break;
+            }
+        }
+    }
+
+    log.debug(`Resolved executable path from '${command}' to '${executablePath}'`);
+    command = executablePath;
+}
 
 // MCP protocol state
 const state = {
@@ -142,6 +217,12 @@ log.debug(`Command: ${command}`);
 log.debug(`Args: ${args.join(' ')}`);
 if (CONFIG.discoveryMode) {
     log.info('Running in discovery mode - will exit after tools are discovered');
+
+    // In discovery mode, set a timeout to exit if no tools are discovered
+    setTimeout(() => {
+        log.error('Discovery mode timeout - no tools discovered within 10 seconds').catch(() => { });
+        process.exit(2);
+    }, 10000);
 }
 
 /**
@@ -187,20 +268,33 @@ async function makeApiRequest(
 
                 res.on('end', () => {
                     try {
-                        if (responseData) {
-                            const parsedData = JSON.parse(responseData);
-                            resolve(parsedData);
+                        log.debug(`API response from ${endpoint}: status=${res.statusCode}, data=${responseData}`);
+
+                        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+                            if (responseData) {
+                                const parsedData = JSON.parse(responseData);
+                                resolve(parsedData);
+                            } else {
+                                resolve({});
+                            }
                         } else {
-                            resolve({});
+                            reject(new Error(`API request failed with status ${res.statusCode}: ${responseData}`));
                         }
                     } catch (e) {
-                        reject(new Error(`Invalid response: ${responseData}`));
+                        reject(new Error(`Invalid response from ${endpoint}: ${responseData}`));
                     }
                 });
             });
 
             req.on('error', (error) => {
+                log.error(`Network error making request to ${endpoint}: ${error.message}`).catch(() => { });
                 reject(error);
+            });
+
+            req.setTimeout(5000, () => {
+                log.error(`Request to ${endpoint} timed out after 5 seconds`).catch(() => { });
+                req.destroy();
+                reject(new Error('Request timeout'));
             });
 
             if (method === 'POST') {
@@ -344,6 +438,7 @@ async function processRequest(message: any): Promise<any> {
         }
 
         // For non-tool calls or verified tool calls, pass through
+        await log.debug(`Returning message from processRequest: ${JSON.stringify(message)}`);
         return message;
     } catch (error) {
         await log.error('Error processing request', error);
@@ -551,124 +646,184 @@ async function processResponse(message: any): Promise<any> {
     }
 }
 
-// Handle signals to ensure clean shutdown
-async function handleSignal(signal: NodeJS.Signals): Promise<void> {
-    await log.debug(`Received ${signal}, shutting down`);
+// Main execution wrapped in async function
+(async function main() {
+    // Ensure log directory exists
+    await ensureLogDirectory();
 
-    if (targetServer) {
-        targetServer.kill(signal);
+    // Handle signals to ensure clean shutdown
+    async function handleSignal(signal: NodeJS.Signals, targetServer: any): Promise<void> {
+        await log.debug(`Received ${signal}, shutting down`);
+
+        if (targetServer) {
+            targetServer.kill(signal);
+        }
+        process.exit(0);
     }
-    process.exit(0);
-}
 
-// Set up signal handlers
-process.on('SIGINT', () => {
-    handleSignal('SIGINT').catch(err => console.error('Error in signal handler:', err));
-});
-process.on('SIGTERM', () => {
-    handleSignal('SIGTERM').catch(err => console.error('Error in signal handler:', err));
-});
+    // Start the target MCP server
+    async function startTargetServer() {
+        // Prepare environment with proper PATH for spawned processes
+        const spawnEnv = { ...process.env };
 
-// Remove all the HTTP-based log sending code
-// Just handle process exit for cleanup
-process.on('exit', () => {
-    console.error('Process exiting');
-});
+        // Ensure the directory containing the node executable is in PATH
+        if (command.includes('/')) {
+            // If we resolved an absolute path for the command, add its directory to PATH
+            const commandDir = path.dirname(command);
+            const currentPath = spawnEnv.PATH || '';
 
-// Start the target MCP server
-const targetServer = spawn(command, args, {
-    stdio: ['pipe', 'pipe', 'inherit'],
-    env: process.env
-});
+            // Add the command directory to the beginning of PATH if it's not already there
+            if (!currentPath.split(path.delimiter).includes(commandDir)) {
+                spawnEnv.PATH = commandDir + path.delimiter + currentPath;
+                await log.debug(`Added ${commandDir} to PATH for spawned process`);
+            }
+        }
 
-// Set up error handling for target process
-targetServer.on('error', (error) => {
-    log.error(`Failed to start target server: ${error.message}`).catch(err => {
-        console.error('Failed to log error:', err);
+        // Also add common Node.js binary locations to PATH as fallback
+        const commonNodeDirs = [
+            '/usr/local/bin',
+            '/usr/bin',
+            '/opt/homebrew/bin'
+        ];
+
+        let pathUpdated = false;
+        for (const dir of commonNodeDirs) {
+            const currentPath = spawnEnv.PATH || '';
+            if (!currentPath.split(path.delimiter).includes(dir)) {
+                spawnEnv.PATH = (spawnEnv.PATH || '') + path.delimiter + dir;
+                pathUpdated = true;
+            }
+        }
+
+        if (pathUpdated) {
+            await log.debug(`Updated PATH for spawned process: ${spawnEnv.PATH}`);
+        }
+
+        return spawn(command, args, {
+            stdio: ['pipe', 'pipe', 'inherit'],
+            env: spawnEnv
+        });
+    }
+
+    // Start the server
+    const targetServer = await startTargetServer();
+
+    // Set up error handling for target process
+    targetServer.on('error', (error) => {
+        log.error(`Failed to start target server: ${error.message}`).catch(err => {
+            console.error('Failed to log error:', err);
+        });
+        process.exit(1);
     });
-    process.exit(1);
-});
 
-// Handle target server exit
-targetServer.on('close', (code) => {
-    log.debug(`Target server exited with code ${code || 0}`).catch(err => {
-        console.error('Failed to log message:', err);
+    // Handle target server exit
+    targetServer.on('close', (code) => {
+        log.debug(`Target server exited with code ${code || 0}`).catch(err => {
+            console.error('Failed to log message:', err);
+        });
+        process.exit(code || 0);
     });
-    process.exit(code || 0);
-});
 
-// Set up read buffers for processing JSON-RPC messages
-const stdinBuffer = new ReadBuffer();
-const targetStdoutBuffer = new ReadBuffer();
+    // Set up read buffers for processing JSON-RPC messages
+    const stdinBuffer = new ReadBuffer();
+    const targetStdoutBuffer = new ReadBuffer();
 
-// Handle messages from stdin (from MCP client)
-process.stdin.on('data', async (chunk) => {
-    await log.debug(`Received ${chunk.length} bytes from stdin`);
+    // Handle messages from stdin (from MCP client)
+    process.stdin.on('data', async (chunk) => {
+        await log.debug(`Received ${chunk.length} bytes from stdin`);
 
-    // Add data to buffer
-    stdinBuffer.append(chunk);
+        // Add data to buffer
+        stdinBuffer.append(chunk);
 
-    // Process all complete messages in the buffer
-    while (true) {
-        try {
-            const message = stdinBuffer.readMessage();
-            if (!message) break;
+        // Process all complete messages in the buffer
+        while (true) {
+            try {
+                const message = stdinBuffer.readMessage();
+                if (!message) break;
 
-            await log.debug(`Processing message from stdin: ${JSON.stringify(message)}`);
+                await log.debug(`Processing message from stdin: ${JSON.stringify(message)}`);
 
-            // Process the message before forwarding
-            const processedMessage = await processRequest(message);
+                // Process the message before forwarding
+                const processedMessage = await processRequest(message);
 
-            // If the processed message is a block response (different from the original),
-            // send it directly to stdout instead of to the target server
-            if (processedMessage !== message && processedMessage.result) {
-                await log.debug(`Sending block response directly to stdout`);
+                await log.debug(`Processed message result: ${JSON.stringify(processedMessage)}`);
+
+                // If the processed message is a block response (different from the original),
+                // send it directly to stdout instead of to the target server
+                if (processedMessage !== message && processedMessage.result) {
+                    await log.debug(`Sending block response directly to stdout`);
+                    const serialized = serializeMessage(processedMessage);
+                    process.stdout.write(serialized);
+                    continue;
+                }
+
+                // Otherwise, forward to target server's stdin
+                const serialized = serializeMessage(processedMessage);
+                await log.debug(`Forwarding message to target server: ${serialized.trim()}`);
+                targetServer.stdin.write(serialized);
+            } catch (error) {
+                await log.error('Failed to process stdin message', error);
+            }
+        }
+    });
+
+    // Handle messages from target server's stdout (to MCP client)
+    targetServer.stdout.on('data', async (chunk) => {
+        await log.debug(`Received ${chunk.length} bytes from target server: ${chunk.toString()}`);
+
+        // Add data to buffer
+        targetStdoutBuffer.append(chunk);
+
+        // Process all complete messages in the buffer
+        while (true) {
+            try {
+                const message = targetStdoutBuffer.readMessage();
+                if (!message) break;
+
+                await log.debug(`Processing message from server: ${JSON.stringify(message)}`);
+
+                // Process the message before forwarding
+                const processedMessage = await processResponse(message);
+
+                // Forward to our stdout (to MCP client)
                 const serialized = serializeMessage(processedMessage);
                 process.stdout.write(serialized);
-                continue;
+            } catch (error) {
+                await log.error('Failed to process server message', error);
             }
-
-            // Otherwise, forward to target server's stdin
-            const serialized = serializeMessage(processedMessage);
-            targetServer.stdin.write(serialized);
-        } catch (error) {
-            await log.error('Failed to process stdin message', error);
         }
-    }
-});
-
-// Handle messages from target server's stdout (to MCP client)
-targetServer.stdout.on('data', async (chunk) => {
-    await log.debug(`Received ${chunk.length} bytes from target server`);
-
-    // Add data to buffer
-    targetStdoutBuffer.append(chunk);
-
-    // Process all complete messages in the buffer
-    while (true) {
-        try {
-            const message = targetStdoutBuffer.readMessage();
-            if (!message) break;
-
-            await log.debug(`Processing message from server: ${JSON.stringify(message)}`);
-
-            // Process the message before forwarding
-            const processedMessage = await processResponse(message);
-
-            // Forward to our stdout (to MCP client)
-            const serialized = serializeMessage(processedMessage);
-            process.stdout.write(serialized);
-        } catch (error) {
-            await log.error('Failed to process server message', error);
-        }
-    }
-});
-
-// Handle stdin end
-process.stdin.on('end', () => {
-    log.debug('stdin ended, closing target server').catch(err => {
-        console.error('Failed to log message:', err);
     });
 
-    targetServer.stdin.end();
+    // Handle stdin end
+    process.stdin.on('end', () => {
+        log.debug('stdin ended, closing target server').catch(err => {
+            console.error('Failed to log message:', err);
+        });
+
+        if (CONFIG.discoveryMode) {
+            // In discovery mode, don't immediately close the target server
+            // Wait for the tools response or timeout
+            log.debug('Discovery mode: keeping target server alive to receive tools response').catch(() => { });
+        } else {
+            targetServer.stdin.end();
+        }
+    });
+
+    // Set up signal handlers
+    process.on('SIGINT', () => {
+        handleSignal('SIGINT', targetServer).catch(err => console.error('Error in signal handler:', err));
+    });
+    process.on('SIGTERM', () => {
+        handleSignal('SIGTERM', targetServer).catch(err => console.error('Error in signal handler:', err));
+    });
+
+    // Remove all the HTTP-based log sending code
+    // Just handle process exit for cleanup
+    process.on('exit', () => {
+        console.error('Process exiting');
+    });
+
+})().catch(error => {
+    console.error('Fatal error in main execution:', error);
+    process.exit(1);
 });
