@@ -743,11 +743,6 @@ export abstract class BaseMCPConfiguration {
                     env: {}
                 };
 
-                modifiedConfig.mcpServers[newSecureToolsServerName] = {
-                    command: 'node',
-                    args: ['/Users/sau/Code/MCP-Defender-Code/MCP-Defender-Secure-Tools/dist/index.js'],
-                    env: {}
-                };
                 this.logger.info('Added MCP Defender Secure Tools server to configuration using published package');
             } else {
                 this.logger.debug('MCP Defender Secure Tools server already exists in configuration');
