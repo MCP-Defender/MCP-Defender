@@ -409,7 +409,7 @@ ${type === 'tool_call' ? `<category>${sig.category || 'Unknown'}</category>` : '
     ).join('\n\n');
 
     // Generate the appropriate input based on type
-    const typeLabel = type === 'tool_call' ? 'Tool Call Details' : 'Tool Response Details';
+    const typeLabel = "Scan Details";
     const contentLabel = type === 'tool_call' ? 'Tool arguments' : 'Tool response';
     const userIntentSection = userIntent && type === 'tool_call' ? `\nUser intent: ${userIntent}` : '';
 
