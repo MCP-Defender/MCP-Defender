@@ -47,11 +47,14 @@ export default function SignaturesTab() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-sm text-muted-foreground mb-4">
-                        Select which signatures to use for tool call verification. All selected signatures will be
-                        checked against tool calls and responses based on your verification mode.
-                    </p>
-                    <SignaturesTable />
+                    <div className="space-y-4">
+                        <p className="text-sm text-muted-foreground">
+                            Select which signatures to use for tool call verification. All selected signatures will be
+                            checked against tool calls and responses based on your verification mode.
+                        </p>
+
+                        <SignaturesTable />
+                    </div>
                 </CardContent>
             </Card>
         </div>

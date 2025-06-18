@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { app, shell, BrowserWindow } from 'electron';
 import { BaseService, ServiceEvent } from '../base-service';
-import { Signature } from './types';
+import { Signature, isLLMSignature, isDeterministicSignature } from './types';
 import { DefenderServiceEvent } from '../defender/types';
 import { ServiceManager } from '../service-manager';
 
@@ -122,7 +122,10 @@ export class SignaturesService extends BaseService {
     public notifyDefenderAndWebContents(): void {
         if (this.signatures.length > 0) {
             this.logger.info(`Publishing ${this.signatures.length} signatures to event bus`);
-            this.publishEvent(ServiceEvent.SIGNATURES_UPDATED, this.signatures);
+            this.publishEvent(ServiceEvent.SIGNATURES_UPDATED, {
+                signatures: this.signatures,
+                signaturesDirectory: USERS_SIGNATURES
+            });
         } else {
             this.logger.warn('No signatures to publish');
         }
@@ -137,53 +140,66 @@ export class SignaturesService extends BaseService {
     }
 
     /**
-     * Load signatures from all JSON files in the user's signatures directory
+     * Load signatures from the unified signatures.json file
      */
     private async processUsersSignaturesChanges(): Promise<Signature[]> {
         // Clear current signatures
         this.signatures = [];
 
         try {
-            // Read all files in the directory
-            const files = await fs.promises.readdir(USERS_SIGNATURES);
-            const jsonFiles = files.filter(file => file.endsWith('.json'));
+            const signaturesFilePath = path.join(USERS_SIGNATURES, 'signatures.json');
 
-            this.logger.info(`Found ${jsonFiles.length} signature files in ${USERS_SIGNATURES}`);
-
-            // Process each JSON file
-            for (const file of jsonFiles) {
-                try {
-                    const filePath = path.join(USERS_SIGNATURES, file);
-                    const data = await fs.promises.readFile(filePath, 'utf8');
-                    const fileSignatures = JSON.parse(data) as Signature[];
-
-                    // Validate each signature
-                    const validSignatures = fileSignatures.filter(sig => {
-                        return sig.id && sig.name && sig.description && sig.prompt && sig.category;
-                    });
-
-                    if (validSignatures.length !== fileSignatures.length) {
-                        this.logger.warn(`File ${file} contained ${fileSignatures.length - validSignatures.length} invalid signatures`);
-                    }
-
-                    // Add valid signatures to our collection
-                    this.signatures = [...this.signatures, ...validSignatures];
-                    this.logger.info(`Loaded ${validSignatures.length} signatures from ${file}`);
-                } catch (error) {
-                    this.logger.error(`Error processing signature file ${file}:`, error);
-                    // Continue with other files even if one fails
-                }
+            // Check if the unified signatures file exists
+            try {
+                await fs.promises.access(signaturesFilePath);
+            } catch (error) {
+                this.logger.warn('No signatures.json file found in user directory');
+                return this.signatures;
             }
+
+            // Read and parse the unified signatures file
+            const data = await fs.promises.readFile(signaturesFilePath, 'utf8');
+            const allSignatures = JSON.parse(data) as Signature[];
+
+            this.logger.info(`Found ${allSignatures.length} signatures in signatures.json`);
+
+            // Validate each signature based on its type
+            const validSignatures = allSignatures.filter(sig => {
+                // Check base properties
+                if (!sig.id || !sig.name || !sig.description || !sig.category || !sig.type) {
+                    return false;
+                }
+
+                // Type-specific validation
+                if (sig.type === 'llm') {
+                    return !!(sig as any).prompt;
+                } else if (sig.type === 'deterministic') {
+                    return !!(sig as any).functionFile;
+                }
+
+                // Unknown type
+                return false;
+            });
+
+            if (validSignatures.length !== allSignatures.length) {
+                this.logger.warn(`signatures.json contained ${allSignatures.length - validSignatures.length} invalid signatures`);
+            }
+
+            // Set our validated signatures
+            this.signatures = validSignatures;
+            this.logger.info(`Loaded ${validSignatures.length} valid signatures (${validSignatures.filter(s => s.type === 'llm').length} LLM, ${validSignatures.filter(s => s.type === 'deterministic').length} deterministic)`);
 
             // Update the defender service with the new signatures
             this.notifyDefenderAndWebContents();
 
             return this.signatures;
         } catch (error) {
-            this.logger.error('Error processing signatures directory:', error);
+            this.logger.error('Error processing signatures file:', error);
             throw error;
         }
     }
+
+
 
     /**
      * Ensures the signatures directory exists and syncs bundled signatures
@@ -212,32 +228,22 @@ export class SignaturesService extends BaseService {
 
                 this.logger.info(`Syncing signatures from ${BUNDLED_SIGNATURES}`);
 
-                // Read all built-in signature files
-                const files = await fs.promises.readdir(BUNDLED_SIGNATURES);
-                const jsonFiles = files.filter(file => file.endsWith('.json'));
+                // Check if unified signatures.json exists in bundled directory
+                const bundledSignaturesFile = path.join(BUNDLED_SIGNATURES, 'signatures.json');
+                try {
+                    await fs.promises.access(bundledSignaturesFile);
 
-                if (jsonFiles.length === 0) {
-                    this.logger.warn('No built-in signature files found - this may cause functionality issues');
-                    return;
+                    // Copy the unified signatures file
+                    const data = await fs.promises.readFile(bundledSignaturesFile, 'utf8');
+                    const userSignaturesFile = path.join(USERS_SIGNATURES, 'signatures.json');
+                    await fs.promises.writeFile(userSignaturesFile, data, 'utf8');
+                    this.logger.info('Copied unified signatures.json to user directory');
+                } catch (error) {
+                    this.logger.error('Error copying unified signatures.json:', error);
                 }
 
-                // Copy each built-in signature file to user directory
-                for (const file of jsonFiles) {
-                    try {
-                        const srcFilePath = path.join(BUNDLED_SIGNATURES, file);
-                        const destFilePath = path.join(USERS_SIGNATURES, file);
-
-                        // Read built-in signature file
-                        const data = await fs.promises.readFile(srcFilePath, 'utf8');
-
-                        // Write to user directory, overwriting if exists
-                        await fs.promises.writeFile(destFilePath, data, 'utf8');
-                        this.logger.info(`Copied built-in signature file ${file} to user directory`);
-                    } catch (error) {
-                        this.logger.error(`Error copying built-in signature file ${file}:`, error);
-                        // Continue with other files even if one fails
-                    }
-                }
+                // Also sync deterministic functions directory if it exists
+                await this.syncDeterministicFunctions();
             } catch (error) {
                 this.logger.error('Error syncing built-in signatures:', error);
                 throw error;
@@ -245,6 +251,54 @@ export class SignaturesService extends BaseService {
         } catch (error) {
             this.logger.error('Error ensuring signatures directory:', error);
             throw error;
+        }
+    }
+
+    /**
+ * Sync deterministic function files from bundled to user directory
+ */
+    private async syncDeterministicFunctions(): Promise<void> {
+        try {
+            // Define paths (simplified - functions are directly in deterministic/ directory)
+            const bundledDeterministicDir = path.join(BUNDLED_SIGNATURES, 'deterministic');
+            const userDeterministicDir = path.join(USERS_SIGNATURES, 'deterministic');
+
+            // Check if bundled deterministic directory exists
+            try {
+                await fs.promises.access(bundledDeterministicDir);
+            } catch (error) {
+                this.logger.info('No bundled deterministic functions found, skipping sync');
+                return;
+            }
+
+            // Create user deterministic directory if it doesn't exist
+            try {
+                await fs.promises.mkdir(userDeterministicDir, { recursive: true });
+                this.logger.info(`Created deterministic directory at ${userDeterministicDir}`);
+            } catch (error) {
+                // Directory might already exist, that's fine
+            }
+
+            // Copy function files directly from deterministic directory
+            try {
+                // Copy all function files from bundled deterministic directory
+                const functionFiles = await fs.promises.readdir(bundledDeterministicDir);
+                for (const file of functionFiles) {
+                    if (file.endsWith('.js')) {
+                        const srcFile = path.join(bundledDeterministicDir, file);
+                        const destFile = path.join(userDeterministicDir, file);
+
+                        const data = await fs.promises.readFile(srcFile, 'utf8');
+                        await fs.promises.writeFile(destFile, data, 'utf8');
+                        this.logger.info(`Copied deterministic function ${file} to user directory`);
+                    }
+                }
+            } catch (error) {
+                this.logger.error('Error copying deterministic functions:', error);
+            }
+
+        } catch (error) {
+            this.logger.error('Error syncing deterministic functions:', error);
         }
     }
 
@@ -275,10 +329,10 @@ export class SignaturesService extends BaseService {
         // Ensure directory exists and load initial signatures
         await this.processUsersSignaturesChanges();
 
-        // Start watching the directory
+        // Start watching the directory  
         this.directoryWatcher = fs.watch(USERS_SIGNATURES, (eventType, filename) => {
-            if (filename && filename.endsWith('.json')) {
-                this.logger.info(`Signature file change detected: ${eventType} - ${filename}`);
+            if (filename === 'signatures.json') {
+                this.logger.info(`Signatures file change detected: ${eventType} - ${filename}`);
                 this.handleSignatureChanges();
             }
         });

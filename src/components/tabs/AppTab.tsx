@@ -213,8 +213,8 @@ const MCPServerCards = ({ servers }: { servers: ProtectedServerConfig[] }) => {
                             return serverConfig.env?.[MCPDefenderEnvVar.OriginalUrl] || serverConfig.url;
                         } else {
                             // For STDIO servers, get original command and args from env or current config
-                            const originalCmd = serverConfig.env?.[MCPDefenderEnvVar.OriginalCommand] || serverConfig.command;
-                            const originalArgs = serverConfig.env?.[MCPDefenderEnvVar.OriginalArgs] ?
+                            let originalCmd = serverConfig.env?.[MCPDefenderEnvVar.OriginalCommand] || serverConfig.command;
+                            let originalArgs = serverConfig.env?.[MCPDefenderEnvVar.OriginalArgs] ?
                                 JSON.parse(serverConfig.env[MCPDefenderEnvVar.OriginalArgs]) :
                                 serverConfig.args;
 

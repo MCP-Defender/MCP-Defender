@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react"
-import { Signature } from "@/services/signatures/types"
+import { Signature, isLLMSignature, isDeterministicSignature } from "@/services/signatures/types"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Search } from "lucide-react"
+import { Search, Code, Brain } from "lucide-react"
 import { toast } from "sonner"
 import {
     Table,
@@ -32,10 +32,13 @@ export function SignaturesTable({ onDisabledSaved }: SignaturesTableProps) {
     // Filter signatures based on search query
     const filteredSignatures = signatures.filter(sig => {
         if (!searchQuery) return true;
+        const query = searchQuery.toLowerCase();
+        const signatureType = isLLMSignature(sig) ? 'llm' : isDeterministicSignature(sig) ? 'deterministic' : 'unknown';
         return (
-            sig.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            sig.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            sig.description.toLowerCase().includes(searchQuery.toLowerCase())
+            sig.name.toLowerCase().includes(query) ||
+            sig.category.toLowerCase().includes(query) ||
+            sig.description.toLowerCase().includes(query) ||
+            signatureType.includes(query)
         );
     });
 
@@ -209,6 +212,7 @@ export function SignaturesTable({ onDisabledSaved }: SignaturesTableProps) {
                                 </div>
                             </TableHead>
                             <TableHead>Name</TableHead>
+                            <TableHead>Type</TableHead>
                             <TableHead>Category</TableHead>
                             <TableHead>Description</TableHead>
                         </TableRow>
@@ -228,6 +232,23 @@ export function SignaturesTable({ onDisabledSaved }: SignaturesTableProps) {
                                         </div>
                                     </TableCell>
                                     <TableCell className="font-medium">{signature.name}</TableCell>
+                                    <TableCell>
+                                        <div className="flex items-center gap-2">
+                                            {isLLMSignature(signature) ? (
+                                                <>
+                                                    <Brain className="h-4 w-4 text-blue-500" />
+                                                    <span className="text-sm text-blue-700">LLM</span>
+                                                </>
+                                            ) : isDeterministicSignature(signature) ? (
+                                                <>
+                                                    <Code className="h-4 w-4 text-green-500" />
+                                                    <span className="text-sm text-green-700">Deterministic</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-sm text-gray-500">Unknown</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{signature.category}</TableCell>
                                     <TableCell className="max-w-md truncate" title={signature.description}>
                                         {signature.description}
@@ -236,7 +257,7 @@ export function SignaturesTable({ onDisabledSaved }: SignaturesTableProps) {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={4} className="h-24 text-center">
+                                <TableCell colSpan={5} className="h-24 text-center">
                                     {searchQuery ? "No matching signatures found." : "No signatures available."}
                                 </TableCell>
                             </TableRow>

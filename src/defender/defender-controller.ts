@@ -501,10 +501,16 @@ process.parentPort.on('message', (message: any) => {
 
     case DefenderServiceEvent.UPDATE_SIGNATURES:
       const signatures: Signature[] = messageData?.signatures || [];
+      const signaturesDirectory: string = messageData?.signaturesDirectory;
       console.log(`Received signatures update with ${signatures.length} signatures`);
 
-      // Update signatures in state
+      if (signaturesDirectory) {
+        console.log(`Signatures directory path: ${signaturesDirectory}`);
+      }
+
+      // Update signatures and directory path in state
       state.signatures = signatures;
+      state.signaturesDirectory = signaturesDirectory;
       break;
 
     case DefenderServiceEvent.UPDATE_SETTINGS:
