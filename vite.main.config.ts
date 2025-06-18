@@ -31,6 +31,26 @@ for (const file of assetFiles) {
     }
 }
 
+// Copy menu_status_icons directory to build
+const menuStatusIconsSrcDir = path.resolve(__dirname, 'src/assets/menu_status_icons');
+const menuStatusIconsDestDir = path.resolve(__dirname, '.vite/build/assets/menu_status_icons');
+
+// Create menu_status_icons destination directory
+if (!fs.existsSync(menuStatusIconsDestDir)) {
+    fs.mkdirSync(menuStatusIconsDestDir, { recursive: true });
+}
+
+// Copy all menu_status_icons files
+if (fs.existsSync(menuStatusIconsSrcDir)) {
+    const menuStatusIconsFiles = fs.readdirSync(menuStatusIconsSrcDir);
+    for (const file of menuStatusIconsFiles) {
+        const srcPath = path.join(menuStatusIconsSrcDir, file);
+        const destPath = path.join(menuStatusIconsDestDir, file);
+        fs.copyFileSync(srcPath, destPath);
+        console.log(`Copied menu_status_icon file ${srcPath} to ${destPath}`);
+    }
+}
+
 // Copy signatures directory to build
 const signaturesSrcDir = path.resolve(__dirname, 'signatures');
 const signaturesDestDir = path.resolve(__dirname, '.vite/build/signatures');

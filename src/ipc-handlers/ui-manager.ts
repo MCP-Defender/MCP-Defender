@@ -1,4 +1,4 @@
-import { BrowserWindow, Tray, Menu, ipcMain, nativeImage, app, dialog } from 'electron';
+import { BrowserWindow, Tray, Menu, ipcMain, nativeImage, app, dialog, NativeImage } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { DefenderState, DefenderStatus, DefenderServiceEvent } from '../services/defender/types';
@@ -352,6 +352,26 @@ export function notifyMainWindowToOpenSettings(): void {
     }
 }
 
+function getFullMenuStatusImage(icon_filename: string): NativeImage {
+    let iconPath;
+    // In development, use the path directly from source
+    if (process.env.NODE_ENV === 'development') {
+        iconPath = path.join(__dirname, './assets/menu_status_icons/', icon_filename);
+    }
+    // For production builds, there are two cases:
+    else {
+        // 1. During packaging with Electron Forge, the extra resources are copied to the resources directory
+        if (process.resourcesPath) {
+            iconPath = path.join(process.resourcesPath, 'menu_status_icons/', icon_filename);
+        }
+        // 2. During Vite builds, the files are in .vite/build/assets
+        else {
+            iconPath = path.join(__dirname, '../assets/menu_status_icons/', icon_filename);
+        }
+    }
+    return nativeImage.createFromPath(iconPath);
+}
+
 /**
  * Update the tray context menu to reflect current app state
  */
@@ -361,19 +381,24 @@ export async function updateTrayContextMenu(state: DefenderState) {
     try {
         // Determine status text and icon
         let statusLabel = '';
+        let statusIcon = getFullMenuStatusImage('Stopped.png');
         if (state.status === DefenderStatus.running) {
-            statusLabel = '🟢 Enabled';
+            statusLabel = 'Enabled';
+            statusIcon = getFullMenuStatusImage('Running.png');
         } else if (state.status === DefenderStatus.starting) {
-            statusLabel = '🟡 Starting...';
+            statusLabel = 'Starting...';
+            statusIcon = getFullMenuStatusImage('Starting.png');
         } else if (state.status === DefenderStatus.error) {
-            statusLabel = '🔴 Error';
+            statusLabel = 'Error';
+            statusIcon = getFullMenuStatusImage('Stopped.png');
         } else {
-            statusLabel = '🔴 Not Protected';
+            statusLabel = 'Not Protected';
+            statusIcon = getFullMenuStatusImage('Stopped.png');
         }
 
         // Build the context menu
         const contextMenu = Menu.buildFromTemplate([
-            { label: statusLabel, enabled: false },
+            { label: statusLabel, icon: statusIcon, enabled: false },
             { type: 'separator' },
             {
                 label: 'Threats',
