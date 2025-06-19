@@ -3,7 +3,7 @@
  */
 export interface StdioServerConfig {
     command: string;
-    args: string[];
+    args?: string[];
     env: {
         [key: string]: string;
     }

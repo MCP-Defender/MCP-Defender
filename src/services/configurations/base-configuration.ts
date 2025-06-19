@@ -301,10 +301,10 @@ export abstract class BaseMCPConfiguration {
 
             // Handle STDIO servers (always protected regardless of SSE setting)
             if ('command' in server) {
-                // Store original command and args
+                // Store original command and args (handle undefined args)
                 const originalCommand = server.command;
-                const originalArgs = [...server.args];
-                logger.debug(`Protecting STDIO server: ${key}, original command: ${originalCommand}`);
+                const originalArgs = server.args ? [...server.args] : [];
+                logger.debug(`Protecting STDIO server: ${key}, original command: ${originalCommand}, original args: ${originalArgs.length}`);
 
                 // Add metadata - store the original server name
                 const newEnv = {
