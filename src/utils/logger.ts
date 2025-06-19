@@ -11,7 +11,7 @@ export enum LogLevel {
 }
 
 // Log configuration constants
-const MAX_LOG_MESSAGE_LENGTH = 2500;
+const MAX_LOG_MESSAGE_LENGTH = 500;
 
 // Log file path
 const LOG_DIR = path.join(app.getPath('userData'), 'logs');

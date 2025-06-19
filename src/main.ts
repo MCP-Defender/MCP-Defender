@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, autoUpdater } from 'electron';
 import { updateElectronApp } from 'update-electron-app';
 // @ts-ignore
 import started from 'electron-squirrel-startup';
@@ -51,19 +51,6 @@ let deeplinkingUrl: string | null = null;
 
 // Store the path to the CLI in tmp directory
 let tmpCliPath: string | null = null;
-
-// Update the app from Github Releases (repo defined in package.json)
-// https://www.electronforge.io/config/publishers/github#auto-updating-from-github
-updateElectronApp({
-  updateInterval: '1 hour',
-  notifyUser: true,
-  logger: {
-    info: (message) => logger.info(`[Updater] ${message}`),
-    warn: (message) => logger.warn(`[Updater] ${message}`),
-    error: (message) => logger.error(`[Updater] ${message}`),
-    log: (message) => logger.info(`[Updater] ${message}`)
-  }
-});
 
 // Protocol handler registration - following Electron docs exactly
 if (process.defaultApp) {
@@ -272,11 +259,77 @@ app.on('window-all-closed', () => {
   }
 });
 
+// Track if quit is coming from autoUpdater.quitAndInstall()
+let isUpdateQuit = false;
+
+// Listen for update events to detect when quit will come from updater
+updateElectronApp({
+  updateInterval: '5 minutes',
+  notifyUser: true,
+  logger: {
+    info: (message) => logger.info(`[Updater] ${message}`),
+    warn: (message) => logger.warn(`[Updater] ${message}`),
+    error: (message) => logger.error(`[Updater] ${message}`),
+    log: (message) => logger.info(`[Updater] ${message}`)
+  },
+  onNotifyUser: (info) => {
+    logger.info('[Updater] Custom update notification handler - user will choose to restart or not');
+
+    const dialogOpts = {
+      type: 'info' as const,
+      buttons: ['Restart', 'Later'],
+      title: 'Application Update',
+      message: process.platform === 'win32' ? info.releaseNotes : info.releaseName,
+      detail: 'A new version has been downloaded. Restart the application to apply the updates.',
+    };
+
+    dialog.showMessageBox(dialogOpts).then(({ response }: { response: number }) => {
+      if (response === 0) {
+        logger.info('[Updater] User chose to restart - setting update quit flag and stopping services');
+        isUpdateQuit = true; // Mark that this quit is from an update
+
+        // Immediately set app.isQuitting to signal to all services that we're shutting down
+        app.isQuitting = true;
+
+        // Stop all services immediately before calling quitAndInstall
+        // This prevents them from doing work during the quit process
+        const serviceManager = ServiceManager.getInstance();
+
+        // Set a timeout to ensure we don't hang on service stopping during updates
+        const serviceStopTimeout = setTimeout(() => {
+          logger.warn('[Updater] Service stopping timed out after 2 seconds, proceeding with update anyway');
+          autoUpdater.quitAndInstall();
+        }, 2000); // 2 second timeout for updates
+
+        serviceManager.stopServices().then(() => {
+          clearTimeout(serviceStopTimeout);
+          logger.info('[Updater] Services stopped, proceeding with quit and install');
+          autoUpdater.quitAndInstall();
+        }).catch((error) => {
+          clearTimeout(serviceStopTimeout);
+          logger.error('[Updater] Error stopping services, proceeding with quit anyway:', error);
+
+          // Even if service stopping fails, proceed with update
+          autoUpdater.quitAndInstall();
+        });
+      } else {
+        logger.info('[Updater] User chose to restart later');
+      }
+    });
+  }
+});
+
 // Clean up resources before quitting
 app.on('before-quit', async (event) => {
-  // Use timeout-based approach to handle updates:
+  // If this quit is from an update, skip graceful shutdown and quit immediately
+  if (isUpdateQuit) {
+    logger.info('[Updater] Update quit detected - skipping graceful shutdown for immediate restart');
+    return; // Allow quit to proceed immediately
+  }
+
+  // Use timeout-based approach to handle normal quits:
   // - Normal quit: Shutdown completes quickly (under 5 seconds) and exits gracefully
-  // - Update scenario: Update process interferes with shutdown, causing timeout → force quit
+  // - Hanging processes: Timeout after 5 seconds and force quit
 
   // If we're not already shutting down, start graceful shutdown
   if (!isShuttingDown) {
@@ -291,13 +344,17 @@ app.on('before-quit', async (event) => {
 
     // Start the graceful shutdown process with timeout
     logger.info('Beginning application shutdown sequence...');
+    const startTime = Date.now();
 
-    // Set a timeout to force quit if shutdown takes too long
-    // This handles update scenarios where the update process interferes with normal shutdown
+    // Set a timeout to handle hung shutdowns
+    // This allows updates to proceed if shutdown gets stuck
     const shutdownTimeout = setTimeout(() => {
-      logger.warn('Shutdown sequence timed out after 5 seconds, forcing quit (likely due to update)');
-      app.exit(0);
-    }, 5000); // 5 second timeout - sufficient for normal shutdown, catches update interference
+      const elapsed = Date.now() - startTime;
+      logger.warn(`Shutdown sequence timed out after ${elapsed}ms (5000ms limit), allowing quit to proceed (likely due to update or hung process)`);
+      // Use app.quit() instead of app.exit(0) to be more update-friendly
+      // If this doesn't work, the OS/update installer will handle it
+      setImmediate(() => app.quit());
+    }, 5000); // 5 second timeout - sufficient for normal shutdown, handles interference
 
     try {
       // Stop all services in the correct order
@@ -307,18 +364,22 @@ app.on('before-quit', async (event) => {
       // Clean up tmp CLI file
       await cleanupTmpCli();
 
-      logger.info('Shutdown sequence complete, quitting application.');
+      const elapsed = Date.now() - startTime;
+      logger.info(`Shutdown sequence complete in ${elapsed}ms, quitting application.`);
 
       // Clear the timeout since we completed successfully
       clearTimeout(shutdownTimeout);
-    } catch (error) {
-      logger.error('Error during shutdown sequence:', error);
-      clearTimeout(shutdownTimeout);
-    }
 
-    // Now we can quit for real - use app.exit(0) to ensure immediate exit
-    // after cleanup is complete
-    app.exit(0);
+      // Allow quit to proceed naturally - don't force it
+      setImmediate(() => app.quit());
+    } catch (error) {
+      const elapsed = Date.now() - startTime;
+      logger.error(`Error during shutdown sequence after ${elapsed}ms:`, error);
+      clearTimeout(shutdownTimeout);
+
+      // Even on error, allow quit to proceed naturally
+      setImmediate(() => app.quit());
+    }
   }
 });
 
@@ -387,6 +448,8 @@ async function copyCLIToTmpDirectory(): Promise<void> {
 export function getTmpCliPath(): string | null {
   return tmpCliPath;
 }
+
+
 
 /**
  * Clean up the CLI file from the tmp directory

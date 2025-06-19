@@ -309,7 +309,7 @@ export class ConfigurationsService extends BaseService {
             const discoveryProcess = spawn(nodePath, [
                 this.cliPath,
                 stdioConfig.command,
-                ...stdioConfig.args
+                ...(stdioConfig.args || [])
             ], {
                 env: {
                     ...process.env,

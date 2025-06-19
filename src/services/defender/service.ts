@@ -56,9 +56,12 @@ export class DefenderService extends BaseService {
         });
 
         // Signatures updates
-        this.subscribeToEvent(ServiceEvent.SIGNATURES_UPDATED, (signatures) => {
-            this.logger.info(`Received ${signatures.length} signatures via event bus`);
-            this.sendMessage(DefenderServiceEvent.UPDATE_SIGNATURES, { signatures });
+        this.subscribeToEvent(ServiceEvent.SIGNATURES_UPDATED, (data) => {
+            this.logger.info(`Received ${data.signatures.length} signatures via event bus`);
+            this.sendMessage(DefenderServiceEvent.UPDATE_SIGNATURES, {
+                signatures: data.signatures,
+                signaturesDirectory: data.signaturesDirectory
+            });
         });
 
         // Configuration updates

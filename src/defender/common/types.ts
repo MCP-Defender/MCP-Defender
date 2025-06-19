@@ -90,6 +90,7 @@ export interface JsonRpcNotification<T> {
 export interface DefenderState {
     server: http.Server | null;
     signatures: Signature[];
+    signaturesDirectory?: string; // Path to the signatures directory from main process
     sseConnections: Map<string, SSEConnection>;
     pendingToolCalls: Map<string, PendingToolCall>; // Track pending tool calls across connections
     running: boolean;
