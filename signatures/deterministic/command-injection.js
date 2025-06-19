@@ -15,7 +15,6 @@ function detectCommandInjection(toolInput, context) {
 
         // Command injection character patterns
         const injectionChars = [
-            /[;&|`$(){}\\[\]<>]/,  // Shell metacharacters
             /\|\s*\w+/,            // Pipes followed by commands
             /&&\s*\w+/,            // Command chaining with &&
             /;\s*\w+/              // Command separation with ;
