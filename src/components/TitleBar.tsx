@@ -149,7 +149,7 @@ const TitleBar: React.FC<TitleBarProps> = ({
       </div>
 
       {titleBarStyle == TitleBarStyle.Main && (
-        <div className="absolute top-0 right-4 h-[52px] webkit-app-region-no-drag flex items-center">
+        <div className="absolute top-0 right-0 h-[52px] webkit-app-region-no-drag flex items-center">
           <Button
             variant={"ghost"}
             size="icon"
