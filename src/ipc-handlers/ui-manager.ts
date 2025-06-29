@@ -6,7 +6,7 @@ import { ServiceManager } from '../services/service-manager';
 import { createLogger } from '../utils/logger';
 import { notification } from '../utils/notification';
 
-const MIN_WINDOW_WIDTH = 650;
+const MIN_WINDOW_WIDTH = 800;
 const MIN_WINDOW_HEIGHT = 500;
 
 // Create a logger for the UI manager
