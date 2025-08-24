@@ -271,9 +271,9 @@ export class SettingsService extends BaseService {
                 loginToken: ''
             },
             llm: {
-                model: "",
+                model: "gpt-5",
                 apiKey: "",
-                provider: ""
+                provider: "OpenAI"
             },
             scanMode: ScanMode.REQUEST_ONLY,
             notificationSettings: NotificationSettings.CONFIG_UPDATES, // Enable config update notifications by default
@@ -306,6 +306,13 @@ export class SettingsService extends BaseService {
                 loadedSettings.disabledSignatures = new Set(loadedSettings.disabledSignatures);
             } else {
                 loadedSettings.disabledSignatures = new Set<string>();
+            }
+
+            // Migration: Change mcp-defender model to gpt-5
+            if (loadedSettings.llm && loadedSettings.llm.model === 'mcp-defender') {
+                this.logger.info('Migrating from mcp-defender to gpt-5 model');
+                loadedSettings.llm.model = 'gpt-5';
+                loadedSettings.llm.provider = 'OpenAI';
             }
 
             // Merge with default settings to ensure we have all fields

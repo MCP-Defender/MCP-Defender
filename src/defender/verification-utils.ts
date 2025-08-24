@@ -429,7 +429,6 @@ async function makeVerificationRequest(
         const response = await openaiClient.chat.completions.create({
             model: llmSettings.model,
             messages: [systemMessage, userMessage],
-            temperature: 0.1, // Low temperature for consistent results
         });
 
         // Extract the response content from the first choice
