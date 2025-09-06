@@ -11,12 +11,10 @@
 
 <p align="center">
   <a href="https://github.com/MCP-Defender/MCP-Defender"><img src="https://img.shields.io/github/stars/MCP-Defender/MCP-Defender?style=social" alt="GitHub stars"></a>
-  <a href="https://discord.gg/SETfUs7dbB"><img src="https://img.shields.io/discord/1376849284884074526?color=7289DA&label=Discord&logo=discord&logoColor=white" alt="Discord"></a>
-  <a href="https://x.com/mcp_defender"><img src="https://img.shields.io/twitter/follow/mcp_defender?style=social" alt="Twitter Follow"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/MCP-Defender/MCP-Defender" alt="GitHub License"></a>
 </p>
 
-
+<h1 align="center"><a href="https://www.docker.com/blog/docker-acquires-mcp-defender-ai-agent-security/">MCP Defender has been acquired by Docker Inc.</a></h1>
 
 🛡️  MCP Defender is a desktop app that protects AI apps like Cursor from a variety of attacks.
 
