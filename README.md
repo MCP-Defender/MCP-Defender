@@ -33,8 +33,6 @@ https://github.com/user-attachments/assets/363ae2b1-e395-4cdc-b5ca-e9862baf89c3
 
 [Download MCP Defender for Mac](https://github.com/MCP-Defender/MCP-Defender/releases/latest)
 
-Windows & Linux Coming Soon
-
 Alternatively you can clone the git repo, and run it as follows:
 
 ```bash
