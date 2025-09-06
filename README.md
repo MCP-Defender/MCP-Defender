@@ -47,12 +47,6 @@ npm start
 
 MCP Defender protects Cursor, Claude, Visual Studio Code and Windsurf.
 
-Protection for more apps coming soon!
-
-## Contributing
-
-We love contributions! Feel free to open issues for bugs or feature requests.
-
 ## License
 
 MCP Defender is licensed under the AGPL-3.0 license. For more details, see the [LICENSE](LICENSE).
