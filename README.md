@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/mcp-defender-mcp-defender-badge.png)](https://mseep.ai/app/mcp-defender-mcp-defender)
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./src/assets/white_knight_icon.png">
