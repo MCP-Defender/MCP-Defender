@@ -10,7 +10,6 @@
 <h2 align="center">Automatically protects MCP traffic in AI apps</h2>
 
 <p align="center">
-  <a href="https://github.com/MCP-Defender/MCP-Defender"><img src="https://img.shields.io/github/stars/MCP-Defender/MCP-Defender?style=social" alt="GitHub stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/MCP-Defender/MCP-Defender" alt="GitHub License"></a>
 </p>
 
